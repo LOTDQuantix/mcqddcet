@@ -35,31 +35,52 @@ export default {
             if (url.pathname === "/" && request.method === "GET") {
                 const html = `
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>DDCET MCQ Generator</title>
           <style>
-            body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; line-height: 1.5; padding: 0 1rem; }
-            code { background: #f4f4f4; padding: 0.2rem 0.4rem; border-radius: 4px; }
-            .status { padding: 1rem; background: #e0f7fa; border-radius: 8px; color: #006064; margin-bottom: 2rem; }
+            :root { --primary: #006064; --bg: #e0f7fa; --text: #333; }
+            body { font-family: 'Segoe UI', system-ui, sans-serif; max-width: 800px; margin: 2rem auto; line-height: 1.6; padding: 0 1.5rem; color: var(--text); background: #fdfdfd; }
+            h1 { color: var(--primary); border-bottom: 2px solid var(--bg); padding-bottom: 0.5rem; }
+            code { background: #f4f4f4; padding: 0.2rem 0.4rem; border-radius: 4px; font-weight: bold; }
+            .status { padding: 1.25rem; background: var(--bg); border-radius: 12px; color: var(--primary); margin-bottom: 2rem; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+            .card { border: 1px solid #eee; padding: 1.5rem; border-radius: 12px; background: white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+            ul { padding-left: 1.2rem; }
+            li { margin-bottom: 0.75rem; }
+            footer { margin-top: 3rem; font-size: 0.9rem; color: #666; border-top: 1px solid #eee; padding-top: 1rem; }
           </style>
         </head>
         <body>
-          <h1>DDCET MCQ Generator API</h1>
-          <div class="status">✅ Worker is Running</div>
+          <div class="status"><span>✅</span> DDCET MCQ Generator API is Live & Running</div>
           
-          <h2>Endpoints</h2>
-          <ul>
-            <li><code>GET /status</code> - View database stats</li>
-            <li><code>GET /health</code> - Simple health check</li>
-            <li><code>POST /generate</code> - Trigger new batch (requires secret)</li>
-          </ul>
+          <div class="card">
+            <h1>API Endpoints</h1>
+            <p>Direct integration with Supabase for DDCET MCQ Daily Generation Pipeline.</p>
+            <ul>
+              <li><code>GET /status</code> - View database statistics & batch history.</li>
+              <li><code>GET /health</code> - Simple health check (confirm uptime).</li>
+              <li><code>POST /generate</code> - Trigger new batch generation (requires <code>X-Generation-Secret</code>).</li>
+            </ul>
+          </div>
+
+          <footer>
+            Debate Club Engine v1.0.0 • Supabase Integrated • Cloudflare Native
+          </footer>
         </body>
         </html>`;
 
                 return new Response(html, {
                     headers: { "Content-Type": "text/html", ...corsHeaders }
                 });
+            }
+
+            // ────────────────────────────────────────
+            // GET /favicon.ico (To resolve 404)
+            // ────────────────────────────────────────
+            if (url.pathname === "/favicon.ico" && request.method === "GET") {
+                return new Response(null, { status: 204, headers: corsHeaders });
             }
 
             // ────────────────────────────────────────
