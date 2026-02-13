@@ -1,7 +1,7 @@
 import { createSupabaseClient } from "./supabase.js";
 import { validateBatch } from "./validator.js";
 import { fetchExistingHashes, deduplicateBatch } from "./deduplicator.js";
-import { insertMCQs, getExistingCounts, createBatchRecord, saveBatchLogs, fetchBatches, fetchBatchDetails } from "./storage.js";
+import { insertMCQs, getExistingCounts, createBatchRecord, saveBatchLogs, fetchBatches, fetchBatchDetails, fetchMCQs, fetchRandomMCQ } from "./storage.js";
 import { generateBatchId, buildSummary } from "./utils.js";
 import { generateDailyBatch } from "./generator.js";
 import { renderSPA } from "./frontend.js";
@@ -34,7 +34,7 @@ export default {
             // ────────────────────────────────────────
             // GET / (SPA Entry Point)
             // ────────────────────────────────────────
-            const spaPaths = ["/", "/dashboard", "/history", "/admin"];
+            const spaPaths = ["/", "/practice", "/browse", "/dashboard", "/history", "/admin"];
             if ((spaPaths.includes(url.pathname) || url.pathname.startsWith("/batch/")) && request.method === "GET") {
                 return new Response(renderSPA(), {
                     headers: { "Content-Type": "text/html", ...corsHeaders }
@@ -89,6 +89,32 @@ export default {
                 } catch (e) {
                     return jsonResponse({ error: e.message }, 404, corsHeaders);
                 }
+            }
+
+            // ────────────────────────────────────────
+            // GET /api/mcqs — Paginated, filterable MCQ list
+            // ────────────────────────────────────────
+            if (url.pathname === "/api/mcqs" && request.method === "GET") {
+                const supabase = createSupabaseClient(env);
+                const subject = url.searchParams.get("subject");
+                const difficulty = url.searchParams.get("difficulty");
+                const page = parseInt(url.searchParams.get("page") || "1");
+                const limit = parseInt(url.searchParams.get("limit") || "20");
+                const result = await fetchMCQs(supabase, { subject, difficulty, page, limit });
+                return jsonResponse(result, 200, corsHeaders);
+            }
+
+            // ────────────────────────────────────────
+            // GET /api/mcqs/random — Random question for quiz mode
+            // ────────────────────────────────────────
+            if (url.pathname === "/api/mcqs/random" && request.method === "GET") {
+                const supabase = createSupabaseClient(env);
+                const subject = url.searchParams.get("subject");
+                const difficulty = url.searchParams.get("difficulty");
+                const exclude = url.searchParams.get("exclude");
+                const mcq = await fetchRandomMCQ(supabase, { subject, difficulty, exclude });
+                if (!mcq) return jsonResponse({ error: "No questions found" }, 404, corsHeaders);
+                return jsonResponse(mcq, 200, corsHeaders);
             }
 
             // ────────────────────────────────────────

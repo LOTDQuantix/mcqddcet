@@ -155,3 +155,40 @@ export async function fetchBatchDetails(supabase, batchId) {
     };
 }
 
+/**
+ * Fetch MCQs with optional filters and pagination.
+ */
+export async function fetchMCQs(supabase, { subject, difficulty, page = 1, limit = 20 } = {}) {
+    let query = supabase
+        .from("mcqs")
+        .select("id, question, option_a, option_b, option_c, option_d, correct_answer, subject, topic, difficulty", { count: "exact" });
+
+    if (subject) query = query.eq("subject", subject);
+    if (difficulty) query = query.eq("difficulty", difficulty);
+
+    const from = (page - 1) * limit;
+    query = query.range(from, from + limit - 1).order("id", { ascending: true });
+
+    const { data, error, count } = await query;
+    if (error) throw new Error(`Failed to fetch MCQs: ${error.message}`);
+    return { data: data || [], total: count || 0, page, limit };
+}
+
+/**
+ * Fetch a single random MCQ with optional subject/difficulty filter.
+ */
+export async function fetchRandomMCQ(supabase, { subject, difficulty, exclude } = {}) {
+    let query = supabase
+        .from("mcqs")
+        .select("id, question, option_a, option_b, option_c, option_d, correct_answer, subject, topic, difficulty");
+
+    if (subject) query = query.eq("subject", subject);
+    if (difficulty) query = query.eq("difficulty", difficulty);
+    if (exclude) query = query.not("id", "in", `(${exclude})`);
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Failed to fetch random MCQ: ${error.message}`);
+    if (!data || data.length === 0) return null;
+
+    return data[Math.floor(Math.random() * data.length)];
+}
