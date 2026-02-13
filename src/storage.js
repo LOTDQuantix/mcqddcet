@@ -69,3 +69,89 @@ export async function getExistingCounts(supabase) {
         total: (mathsCount ?? 0) + (physicsCount ?? 0),
     };
 }
+
+/**
+ * Record a new batch in the system.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} batchData
+ */
+export async function createBatchRecord(supabase, batchData) {
+    const { error } = await supabase
+        .from("batches")
+        .insert([{
+            id: batchData.id,
+            total_questions: batchData.total_questions,
+            subject_distribution: batchData.subject_distribution,
+            difficulty_distribution: batchData.difficulty_distribution,
+            status: batchData.status || 'completed'
+        }]);
+
+    if (error) throw new Error(`Failed to create batch record: ${error.message}`);
+}
+
+/**
+ * Persist agent logs for a specific batch.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} batchId
+ * @param {object[]} logs - { agent_name, log_content }
+ */
+export async function saveBatchLogs(supabase, batchId, logs) {
+    const rows = logs.map(log => ({
+        batch_id: batchId,
+        agent_name: log.agent_name,
+        log_content: log.log_content,
+        timestamp: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+        .from("logs")
+        .insert(rows);
+
+    if (error) throw new Error(`Failed to save batch logs: ${error.message}`);
+}
+
+/**
+ * Fetch all batches sorted by creation date.
+ */
+export async function fetchBatches(supabase) {
+    const { data, error } = await supabase
+        .from("batches")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    if (error) throw new Error(`Failed to fetch batches: ${error.message}`);
+    return data;
+}
+
+/**
+ * Fetch full details for a batch.
+ */
+export async function fetchBatchDetails(supabase, batchId) {
+    const { data: batch, error: batchErr } = await supabase
+        .from("batches")
+        .select("*")
+        .eq("id", batchId)
+        .single();
+
+    if (batchErr) throw new Error(`Batch not found: ${batchErr.message}`);
+
+    const { data: mcqs, error: mcqErr } = await supabase
+        .from("mcqs")
+        .select("*")
+        .eq("batch_id", batchId);
+
+    const { data: logs, error: logErr } = await supabase
+        .from("logs")
+        .select("*")
+        .eq("batch_id", batchId)
+        .order("timestamp", { ascending: true });
+
+    return {
+        ...batch,
+        questions: mcqs || [],
+        logs: logs || []
+    };
+}
+
