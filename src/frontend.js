@@ -149,67 +149,80 @@ export const renderSPA = () => `
 
             async renderDashboard() {
                 this.content.innerHTML = '<div class="loader"></div>';
-                const res = await fetch('/status');
-                const data = await res.json();
-                
-                this.content.innerHTML = \`
-                    <h2 class="mt">System Dashboard</h2>
-                    <p style="color: var(--text-muted)">Real-time statistics from Supabase</p>
-                    <div class="grid mt" style="margin-top: 2rem;">
-                        <div class="card">
-                            <div class="stat-label">Total MCQs</div>
-                            <div class="stat-val">\${data.database.total}</div>
+                try {
+                    const res = await fetch('/status');
+                    const data = await res.json();
+                    
+                    if (!res.ok) throw new Error(data.message || data.error || 'Server error');
+
+                    this.content.innerHTML = \`
+                        <h2 class="mt">System Dashboard</h2>
+                        <p style="color: var(--text-muted)">Real-time statistics from Supabase</p>
+                        <div class="grid mt" style="margin-top: 2rem;">
+                            <div class="card">
+                                <div class="stat-label">Total MCQs</div>
+                                <div class="stat-val">\\\${data.database?.total || 0}</div>
+                            </div>
+                            <div class="card">
+                                <div class="stat-label">Maths Questions</div>
+                                <div class="stat-val">\\\${data.database?.Maths || 0}</div>
+                            </div>
+                            <div class="card">
+                                <div class="stat-label">Physics Questions</div>
+                                <div class="stat-val">\\\${data.database?.Physics || 0}</div>
+                            </div>
                         </div>
-                        <div class="card">
-                            <div class="stat-label">Maths Questions</div>
-                            <div class="stat-val">\${data.database.Maths}</div>
+                        <div class="card mt">
+                            <h3>Infrastructure Health</h3>
+                            <p class="mt" style="color: var(--primary)">🟢 All Systems Operational</p>
+                            <ul class="mt" style="list-style: none; font-size: 0.9rem;">
+                                <li>Cloudflare Worker: Active</li>
+                                <li>Supabase Table: mcqs (Connected)</li>
+                                <li>Supabase Table: batches (Connected)</li>
+                                <li>Supabase Table: logs (Connected)</li>
+                            </ul>
                         </div>
-                        <div class="card">
-                            <div class="stat-label">Physics Questions</div>
-                            <div class="stat-val">\${data.database.Physics}</div>
-                        </div>
-                    </div>
-                    <div class="card mt">
-                        <h3>Infrastructure Health</h3>
-                        <p class="mt" style="color: var(--primary)">🟢 All Systems Operational</p>
-                        <ul class="mt" style="list-style: none; font-size: 0.9rem;">
-                            <li>Cloudflare Worker: Active</li>
-                            <li>Supabase Table: mcqs (Connected)</li>
-                            <li>Supabase Table: batches (Connected)</li>
-                            <li>Supabase Table: logs (Connected)</li>
-                        </ul>
-                    </div>
-                \`;
+                    \`;
+                } catch (e) {
+                    this.content.innerHTML = \`<div class="card" style="border-color: red;"><h2>Dashboard Sync Error</h2><p class="mt">\\\${e.message}</p></div>\`;
+                }
             },
 
             async renderHistory() {
                 this.content.innerHTML = '<div class="loader"></div>';
-                const res = await fetch('/api/batches');
-                const batches = await res.json();
-                
-                let html = \`
-                    <h2 class="mt">Batch History</h2>
-                    <p style="color: var(--text-muted)">Chronological list of all generation sessions</p>
-                    <div class="card mt" style="padding: 0;">
-                \`;
-                
-                batches.forEach(b => {
-                    html += \`
-                        <div class="batch-item">
-                            <div>
-                                <div style="font-weight: 600;">\${b.id}</div>
-                                <div style="font-size: 0.8rem; color: var(--text-muted);">\${new Date(b.created_at).toLocaleString()}</div>
-                            </div>
-                            <div class="flex">
-                                <span style="font-size: 0.8rem; color: var(--primary);">\${b.total_questions} MCQs</span>
-                                <a href="/batch/\${b.id}" class="btn btn-outline" style="padding: 0.3rem 0.6rem;">Details</a>
-                            </div>
-                        </div>
+                try {
+                    const res = await fetch('/api/batches');
+                    const batches = await res.json();
+                    
+                    if (!res.ok) throw new Error(batches.message || batches.error || 'Server error');
+                    if (!Array.isArray(batches)) throw new Error('Invalid batch data');
+
+                    let html = \`
+                        <h2 class="mt">Batch History</h2>
+                        <p style="color: var(--text-muted)">Chronological list of all generation sessions</p>
+                        <div class="card mt" style="padding: 0;">
                     \`;
-                });
-                
-                html += '</div>';
-                this.content.innerHTML = html;
+                    
+                    batches.forEach(b => {
+                        html += \`
+                            <div class="batch-item">
+                                <div>
+                                    <div style="font-weight: 600;">\\\${b.id}</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted);">\\\${new Date(b.created_at).toLocaleString()}</div>
+                                </div>
+                                <div class="flex">
+                                    <span style="font-size: 0.8rem; color: var(--primary);">\\\${b.total_questions} MCQs</span>
+                                    <a href="/batch/\\\${b.id}" class="btn btn-outline" style="padding: 0.3rem 0.6rem;">Details</a>
+                                </div>
+                            </div>
+                        \`;
+                    });
+                    
+                    html += '</div>';
+                    this.content.innerHTML = html;
+                } catch (e) {
+                    this.content.innerHTML = \`<div class="card" style="border-color: red;"><h2>History Sync Error</h2><p class="mt">\\\${e.message}</p></div>\`;
+                }
             },
 
             async renderBatch(id) {

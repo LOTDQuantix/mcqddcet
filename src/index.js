@@ -202,9 +202,11 @@ export default {
             }, 404, corsHeaders);
 
         } catch (err) {
+            console.error(err);
             return jsonResponse({
                 error: "Internal server error",
                 message: err.message,
+                stack: err.stack, // Helpful for debugging the 500
             }, 500, corsHeaders);
         }
     },
