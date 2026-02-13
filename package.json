@@ -1,0 +1,18 @@
+{
+  "name": "ddcet-mcq-generator",
+  "version": "1.0.0",
+  "description": "DDCET MCQ Daily Generation System — Cloudflare Worker + Supabase",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "generate": "node scripts/generate-local.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  },
+  "devDependencies": {
+    "wrangler": "^3.99.0"
+  }
+}
