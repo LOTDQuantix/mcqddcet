@@ -30,6 +30,39 @@ export default {
 
         try {
             // ────────────────────────────────────────
+            // GET / (Landing Page)
+            // ────────────────────────────────────────
+            if (url.pathname === "/" && request.method === "GET") {
+                const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>DDCET MCQ Generator</title>
+          <style>
+            body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; line-height: 1.5; padding: 0 1rem; }
+            code { background: #f4f4f4; padding: 0.2rem 0.4rem; border-radius: 4px; }
+            .status { padding: 1rem; background: #e0f7fa; border-radius: 8px; color: #006064; margin-bottom: 2rem; }
+          </style>
+        </head>
+        <body>
+          <h1>DDCET MCQ Generator API</h1>
+          <div class="status">✅ Worker is Running</div>
+          
+          <h2>Endpoints</h2>
+          <ul>
+            <li><code>GET /status</code> - View database stats</li>
+            <li><code>GET /health</code> - Simple health check</li>
+            <li><code>POST /generate</code> - Trigger new batch (requires secret)</li>
+          </ul>
+        </body>
+        </html>`;
+
+                return new Response(html, {
+                    headers: { "Content-Type": "text/html", ...corsHeaders }
+                });
+            }
+
+            // ────────────────────────────────────────
             // GET /health
             // ────────────────────────────────────────
             if (url.pathname === "/health" && request.method === "GET") {
