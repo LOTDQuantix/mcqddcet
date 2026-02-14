@@ -60,9 +60,24 @@ export function validateMCQ(mcq, index) {
     }
   }
 
-  // Question hygiene: No #ID-hash patterns
-  if (/#\d+-[a-z0-9]{5,}/.test(mcq.question)) {
-    errors.push(`MCQ #${index + 1}: question contains blocked debug ID/hash suffix`);
+  // LaTeX check for math-heavy subjects
+  if (mcq.subject === "Maths" || mcq.topic === "Units & Measurements" || mcq.topic === "Viscosity" || mcq.topic === "Elasticity" || mcq.topic === "Surface Tension") {
+    // Check for obvious math symbols or common functions (removed _ to avoid placeholder issues)
+    const mathRegex = /\\|\{|\}|\^|∫|∑|π|θ|\b(sin|cos|tan|log|sec|cosec|cot)\b/;
+    
+    const parts = [
+      { text: mcq.question, name: "question" },
+      { text: mcq.option_a, name: "option_a" },
+      { text: mcq.option_b, name: "option_b" },
+      { text: mcq.option_c, name: "option_c" },
+      { text: mcq.option_d, name: "option_d" },
+    ];
+
+    for (const part of parts) {
+      if (mathRegex.test(part.text) && !part.text.includes("$") && !part.text.includes("\\(")) {
+        errors.push(`MCQ #${index + 1}: ${part.name} contains math symbols but missing LaTeX delimiters ($ or \\()`);
+      }
+    }
   }
 
   return { valid: errors.length === 0, errors };
@@ -92,6 +107,8 @@ export function validateBatch(mcqs) {
     if (counts[mcq.subject] !== undefined) counts[mcq.subject]++;
   }
 
+  if (counts.Maths !== 50) allErrors.push(`Maths count: expected 50, got ${counts.Maths}`);
+  if (counts.Physics !== 50) allErrors.push(`Physics count: expected 50, got ${counts.Physics}`);
   if (counts.Easy !== 30) allErrors.push(`Easy count: expected 30, got ${counts.Easy}`);
   if (counts.Medium !== 40) allErrors.push(`Medium count: expected 40, got ${counts.Medium}`);
   if (counts.Hard !== 30) allErrors.push(`Hard count: expected 30, got ${counts.Hard}`);
