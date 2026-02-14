@@ -1,6 +1,6 @@
 /**
  * DDCET MCQ Platform — Student-Facing Frontend
- * Dark theme with cyan/teal accents
+ * Enhanced with Math support (KaTeX) and Date-based grouping
  */
 
 export function renderSPA() {
@@ -31,9 +31,13 @@ export function renderSPA() {
         .hero h1 { font-size: 2.8rem; font-weight: 800; color: #fff; margin-bottom: 0.5rem; }
         .hero p { color: var(--text-muted); max-width: 500px; margin: 0 auto 2rem; }
 
-        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; transition: border-color 0.3s; }
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; transition: border-color 0.3s; position: relative; }
         .card:hover { border-color: #333; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+
+        .group-header { border-left: 3px solid var(--primary); padding-left: 1rem; margin: 2rem 0 1rem; }
+        .group-header h2 { font-size: 1.2rem; font-weight: 700; color: #fff; }
+        .group-header span { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; }
 
         .stat-val { font-size: 2.5rem; font-weight: 800; color: var(--primary); }
         .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
@@ -73,6 +77,19 @@ export function renderSPA() {
         .log-container { background: #000; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.85rem; height: 300px; overflow-y: auto; color: #0f0; margin-top: 1rem; }
         .log-entry { margin-bottom: 0.5rem; }
         .log-agent { color: var(--primary); font-weight: bold; }
+
+        /* KaTeX Premium Styling */
+        .katex-display { 
+            overflow-x: auto; 
+            overflow-y: hidden; 
+            padding: 1.5rem 0; 
+            margin: 1rem 0; 
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            text-align: center;
+        }
+        .katex { font-size: 1.15em; color: #fff; }
+        .katex-html { font-family: 'Times New Roman', serif; }
     `;
 
     const script = `
@@ -91,6 +108,26 @@ export function renderSPA() {
                     }
                 });
                 this.route();
+            },
+
+            renderMath() {
+                if (window.renderMathInElement) {
+                    try {
+                        renderMathInElement(document.body, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\\\(', right: '\\\\)', display: false},
+                                {left: '\\\\[', right: '\\\\]', display: true}
+                            ],
+                            throwOnError: false,
+                            trust: true,
+                            strict: false
+                        });
+                    } catch (e) {
+                        console.error("Math rendering error:", e);
+                    }
+                }
             },
 
             route() {
@@ -113,7 +150,7 @@ export function renderSPA() {
                     this.content.innerHTML =
                         '<div class="hero">' +
                             '<h1>DDCET MCQ Practice</h1>' +
-                            '<p>Daily conceptual MCQs for Maths & Physics. Practice, track, and master your preparation.</p>' +
+                            '<p>Conceptual MCQs for Maths & Physics. Practice, track, and master your preparation with ease.</p>' +
                             '<div style="display:flex;gap:1rem;justify-content:center">' +
                                 '<a href="/practice" class="btn">Start Practice</a>' +
                                 '<a href="/browse" class="btn btn-outline">Browse All</a>' +
@@ -130,9 +167,10 @@ export function renderSPA() {
                             '</div>' +
                             '<div class="card" style="text-align:center">' +
                                 '<div class="stat-label">Physics</div>' +
-                                '<div class="stat-val">' + db.Physics + '</div>' +
+                                '<div class="stat-val">' + (db.Physics || 0) + '</div>' +
                             '</div>' +
                         '</div>';
+                    this.renderMath();
                 }).catch(e => {
                     this.content.innerHTML = '<div class="card" style="border-color:red"><h3>Connection Error</h3><p class="mt">' + e.message + '</p></div>';
                 });
@@ -142,14 +180,25 @@ export function renderSPA() {
                 this.score = { correct: 0, total: 0, seen: [] };
                 this.content.innerHTML =
                     '<h2 class="mt">Practice Mode</h2>' +
-                    '<p style="color:var(--text-muted)">Answer questions one at a time. Select an option to see the result.</p>' +
+                    '<p style="color:var(--text-muted)">Practice conceptual questions. Select an option to see the result.</p>' +
                     '<div class="filter-bar mt">' +
-                        '<select id="pf-subject"><option value="">All Subjects</option><option value="Maths">Maths</option><option value="Physics">Physics</option></select>' +
-                        '<select id="pf-difficulty"><option value="">All Difficulty</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>' +
-                        '<button class="btn btn-sm" onclick="app.resetPractice()">Reset Score</button>' +
+                        '<select id="pf-subject" onchange="app.resetPractice()">' +
+                            '<option value="">All Subjects</option>' +
+                            '<option value="Maths">Maths</option>' +
+                            '<option value="Physics">Physics</option>' +
+                            '<option value="Chemistry" disabled>Chemistry (Coming Soon)</option>' +
+                            '<option value="Biology" disabled>Biology (Coming Soon)</option>' +
+                        '</select>' +
+                        '<select id="pf-difficulty" onchange="app.resetPractice()">' +
+                            '<option value="">All Difficulty</option>' +
+                            '<option value="Easy">Easy</option>' +
+                            '<option value="Medium">Medium</option>' +
+                            '<option value="Hard">Hard</option>' +
+                        '</select>' +
+                        '<button class="btn btn-sm btn-outline" onclick="app.resetPractice()">Reset Score</button>' +
                     '</div>' +
                     '<div id="score-display" class="score-bar">' +
-                        '<span>Score:</span> <span class="score">0 / 0</span>' +
+                        '<span>Session Score:</span> <span class="score">0 / 0</span>' +
                     '</div>' +
                     '<div id="question-area"><div class="loader"></div></div>';
                 this.loadQuestion();
@@ -157,7 +206,8 @@ export function renderSPA() {
 
             resetPractice() {
                 this.score = { correct: 0, total: 0, seen: [] };
-                document.querySelector('#score-display .score').textContent = '0 / 0';
+                const s = document.querySelector('#score-display .score');
+                if (s) s.textContent = '0 / 0';
                 this.loadQuestion();
             },
 
@@ -176,7 +226,7 @@ export function renderSPA() {
                     .then(r => r.json())
                     .then(q => {
                         if (q.error) {
-                            area.innerHTML = '<div class="card"><h3>All Done!</h3><p class="mt">You have answered all available questions with these filters.</p><button class="btn mt" onclick="app.resetPractice()">Reset & Try Again</button></div>';
+                            area.innerHTML = '<div class="card" style="text-align:center"><h3>All Questions Completed!</h3><p class="mt">Reset your score to repeat or change filters.</p><button class="btn mt" onclick="app.resetPractice()">Restart Practice</button></div>';
                             return;
                         }
                         this.score.seen.push(q.id);
@@ -200,6 +250,7 @@ export function renderSPA() {
                             '<button id="next-btn" class="btn mt hidden" onclick="app.loadQuestion()">Next Question →</button>' +
                         '</div>';
                         area.innerHTML = html;
+                        this.renderMath();
                     })
                     .catch(e => {
                         area.innerHTML = '<div class="card" style="border-color:red"><p>Error loading question: ' + e.message + '</p></div>';
@@ -224,29 +275,45 @@ export function renderSPA() {
                 if (selected === correct) {
                     btn.classList.add('correct');
                     this.score.correct++;
-                    feedback.innerHTML = '<span style="color:var(--success)">✓ Correct!</span>';
+                    feedback.innerHTML = '<span style="color:var(--success);font-weight:700">✓ Correct! Great job!</span>';
                 } else {
                     btn.classList.add('wrong');
-                    feedback.innerHTML = '<span style="color:var(--danger)">✗ Wrong. Correct answer is ' + correct + '</span>';
+                    feedback.innerHTML = '<span style="color:var(--danger);font-weight:700">✗ Not quite. The correct answer is ' + correct + '.</span>';
                 }
 
                 feedback.classList.remove('hidden');
                 nextBtn.classList.remove('hidden');
                 document.querySelector('#score-display .score').textContent = this.score.correct + ' / ' + this.score.total;
+                this.renderMath();
             },
 
             renderBrowse() {
-                this.browseState = { page: 1, subject: '', difficulty: '' };
                 this.content.innerHTML =
-                    '<h2 class="mt">Browse Questions</h2>' +
-                    '<p style="color:var(--text-muted)">All MCQs in the database. Click to reveal answers.</p>' +
+                    '<h2 class="mt">Question Library</h2>' +
+                    '<p style="color:var(--text-muted)">Grouped by date and topic. Use filters to narrow down.</p>' +
                     '<div class="filter-bar mt">' +
-                        '<select id="bf-subject" onchange="app.browsePage(1)"><option value="">All Subjects</option><option value="Maths">Maths</option><option value="Physics">Physics</option></select>' +
-                        '<select id="bf-difficulty" onchange="app.browsePage(1)"><option value="">All Difficulty</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>' +
+                        '<select id="bf-subject" onchange="app.browsePage(1)">' +
+                            '<option value="">All Subjects</option>' +
+                            '<option value="Maths">Maths</option>' +
+                            '<option value="Physics">Physics</option>' +
+                            '<option value="Chemistry" disabled>Chemistry (Soon)</option>' +
+                        '</select>' +
+                        '<select id="bf-difficulty" onchange="app.browsePage(1)">' +
+                            '<option value="">All Difficulty</option>' +
+                            '<option value="Easy">Easy</option>' +
+                            '<option value="Medium">Medium</option>' +
+                            '<option value="Hard">Hard</option>' +
+                        '</select>' +
                     '</div>' +
                     '<div id="browse-list"><div class="loader"></div></div>' +
                     '<div id="browse-pagination" class="pagination"></div>';
                 this.browsePage(1);
+            },
+
+            toggleAnswer(btn) {
+                const ans = btn.nextElementSibling;
+                ans.classList.toggle('hidden');
+                btn.textContent = ans.classList.contains('hidden') ? 'Show Answer' : 'Hide Answer';
             },
 
             browsePage(page) {
@@ -257,7 +324,7 @@ export function renderSPA() {
 
                 var subj = document.getElementById('bf-subject');
                 var diff = document.getElementById('bf-difficulty');
-                var params = new URLSearchParams({ page: page, limit: 10 });
+                var params = new URLSearchParams({ page: page, limit: 15 });
                 if (subj && subj.value) params.set('subject', subj.value);
                 if (diff && diff.value) params.set('difficulty', diff.value);
 
@@ -265,38 +332,50 @@ export function renderSPA() {
                     .then(r => r.json())
                     .then(res => {
                         if (!res.data || res.data.length === 0) {
-                            list.innerHTML = '<div class="card"><p>No questions found.</p></div>';
+                            list.innerHTML = '<div class="card"><p>No questions found for these filters.</p></div>';
                             pagDiv.innerHTML = '';
                             return;
                         }
 
+                        // Group by date
+                        var groups = {};
+                        res.data.forEach(function(q) {
+                            var dateStr = new Date(q.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                            var dayKey = dateStr;
+                            if (!groups[dayKey]) groups[dayKey] = {};
+                            if (!groups[dayKey][q.subject]) groups[dayKey][q.subject] = [];
+                            groups[dayKey][q.subject].push(q);
+                        });
+
                         var html = '';
-                        res.data.forEach(function(q, i) {
-                            var num = (page - 1) * 10 + i + 1;
-                            html += '<div class="card">' +
-                                '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
-                                    '<div><strong>Q' + num + '.</strong> ' + q.question + '</div>' +
-                                '</div>' +
-                                '<div class="q-meta"><span>' + q.subject + '</span><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
-                                '<div style="margin-top:0.75rem;font-size:0.9rem;color:var(--text-muted)">' +
-                                    'A: ' + q.option_a + ' &nbsp;|&nbsp; B: ' + q.option_b + ' &nbsp;|&nbsp; C: ' + q.option_c + ' &nbsp;|&nbsp; D: ' + q.option_d +
-                                '</div>' +
-                                '<button class="expand-btn" onclick="this.nextElementSibling.classList.toggle(\'hidden\');this.textContent=this.textContent===\'Show Answer\'?\'Hide Answer\':\'Show Answer\'">Show Answer</button>' +
-                                '<div class="browse-answer hidden">Correct: <strong>' + q.correct_answer + '</strong></div>' +
-                            '</div>';
+                        Object.keys(groups).forEach(function(day) {
+                            html += '<div class="group-header"><span>Uploaded on</span><h2>' + day + '</h2></div>';
+                            Object.keys(groups[day]).forEach(function(subject) {
+                                html += '<div style="margin-top:1rem;font-size:0.8rem;color:var(--primary);font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:0 0.5rem">' + subject + '</div>';
+                                groups[day][subject].forEach(function(q, idx) {
+                                    html += '<div class="card">' +
+                                        '<div><strong>' + (idx + 1) + '.</strong> ' + q.question + '</div>' +
+                                        '<div class="q-meta"><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
+                                        '<div style="margin-top:0.75rem;font-size:0.9rem;color:var(--text-muted)">' +
+                                            'A: ' + q.option_a + ' &nbsp;|&nbsp; B: ' + q.option_b + ' &nbsp;|&nbsp; C: ' + q.option_c + ' &nbsp;|&nbsp; D: ' + q.option_d +
+                                        '</div>' +
+                                        '<button class="expand-btn" onclick="app.toggleAnswer(this)">Show Answer</button>' +
+                                        '<div class="browse-answer hidden">Correct Answer: <strong>' + q.correct_answer + '</strong></div>' +
+                                    '</div>';
+                                });
+                            });
                         });
                         list.innerHTML = html;
 
-                        var totalPages = Math.ceil(res.total / 10);
+                        var totalPages = Math.ceil(res.total / 15);
                         var pagHtml = '';
-                        for (var p = 1; p <= totalPages; p++) {
-                            if (p === page) {
-                                pagHtml += '<button class="btn btn-sm" disabled>' + p + '</button>';
-                            } else {
-                                pagHtml += '<button class="btn btn-sm btn-outline" onclick="app.browsePage(' + p + ')">' + p + '</button>';
+                        if (totalPages > 1) {
+                            for (var p = 1; p <= totalPages; p++) {
+                                pagHtml += '<button class="btn btn-sm ' + (p === page ? '' : 'btn-outline') + '" onclick="app.browsePage(' + p + ')" ' + (p === page ? 'disabled' : '') + '>' + p + '</button>';
                             }
                         }
                         pagDiv.innerHTML = pagHtml;
+                        this.renderMath();
                     })
                     .catch(e => {
                         list.innerHTML = '<div class="card" style="border-color:red"><p>Error: ' + e.message + '</p></div>';
@@ -305,19 +384,19 @@ export function renderSPA() {
 
             renderAdmin() {
                 this.content.innerHTML =
-                    '<h2 class="mt">Admin Panel</h2>' +
-                    '<p style="color:var(--text-muted)">Trigger autonomous MCQ generation</p>' +
+                    '<h2 class="mt">Admin Tools</h2>' +
+                    '<p style="color:var(--text-muted)">Autonomous generation & batch management</p>' +
                     '<div class="card mt">' +
-                        '<h3>New Generation Session</h3>' +
-                        '<p class="mt">Triggers the DC pipeline to generate 100 fresh MCQs.</p>' +
+                        '<h3>Generate New Batch</h3>' +
+                        '<p class="mt" style="font-size:0.9rem">Triggers the DC pipeline to generate 100 new MCQs with automatic verification and deduplication.</p>' +
                         '<div class="mt" style="display:flex;gap:0.5rem;align-items:center">' +
-                            '<input type="password" id="gen-secret" placeholder="Generation Secret" style="background:#000;border:1px solid var(--border);color:#fff;padding:0.6rem;border-radius:8px;width:250px">' +
-                            '<button class="btn" onclick="app.triggerGen()">Generate</button>' +
+                            '<input type="password" id="gen-secret" placeholder="Auth Secret" style="background:#000;border:1px solid var(--border);color:#fff;padding:0.6rem;border-radius:8px;width:250px">' +
+                            '<button class="btn" onclick="app.triggerGen()">Start Generation</button>' +
                         '</div>' +
-                        '<div id="gen-status" class="mt hidden"><div class="loader" style="width:20px;height:20px;margin:0;display:inline-block;vertical-align:middle"></div> <span id="gen-msg">Working...</span></div>' +
+                        '<div id="gen-status" class="mt hidden"><div class="loader" style="width:20px;height:20px;margin:0;display:inline-block;vertical-align:middle"></div> <span id="gen-msg">Initializing DC Session...</span></div>' +
                     '</div>' +
                     '<div id="admin-logs" class="hidden">' +
-                        '<h3 class="mt">Agent Logs</h3>' +
+                        '<h3 class="mt">Session Simulation Logs</h3>' +
                         '<div id="live-logs" class="log-container"></div>' +
                     '</div>';
             },
@@ -332,23 +411,24 @@ export function renderSPA() {
 
                 status.classList.remove('hidden');
                 logPanel.classList.remove('hidden');
-                logStream.innerHTML = '<div class="log-entry">Authenticating...</div>';
+                logStream.innerHTML = '<div class="log-entry">Authenticating Worker...</div>';
 
                 fetch('/generate', { method: 'POST', headers: { 'X-Generation-Secret': secret } })
                     .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
                     .then(function(res) {
                         if (res.ok) {
-                            msg.textContent = 'Complete!';
+                            msg.textContent = 'Generation Successful!';
                             if (res.data.logs) {
                                 res.data.logs.forEach(function(l) {
                                     logStream.innerHTML += '<div class="log-entry"><span class="log-agent">[' + l.agent_name + ']</span> ' + l.log_content + '</div>';
                                 });
                             }
-                            logStream.innerHTML += '<div class="log-entry" style="color:var(--success)">Batch ' + (res.data.batchId || 'unknown') + ' created!</div>';
+                            logStream.innerHTML += '<div class="log-entry" style="color:var(--success)">✅ Batch ' + (res.data.batchId || 'sync-complete') + ' processed successfully.</div>';
                         } else {
-                            msg.textContent = 'Failed';
-                            logStream.innerHTML += '<div class="log-entry" style="color:red">Error: ' + res.data.error + '</div>';
+                            msg.textContent = 'Generation Failed';
+                            logStream.innerHTML += '<div class="log-entry" style="color:red">Error: ' + (res.data.error || 'Server rejected request') + '</div>';
                         }
+                        logStream.scrollTop = logStream.scrollHeight;
                     })
                     .catch(function(e) {
                         msg.textContent = 'Error';
@@ -365,11 +445,16 @@ export function renderSPA() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DDCET MCQ Practice Platform</title>
-    <meta name="description" content="Practice daily conceptual MCQs for DDCET Maths and Physics preparation.">
+    <title>DDCET MCQ Platform</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX for Math Equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
     <style>${css}</style>
 </head>
 <body>

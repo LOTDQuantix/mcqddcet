@@ -161,7 +161,7 @@ export async function fetchBatchDetails(supabase, batchId) {
 export async function fetchMCQs(supabase, { subject, difficulty, page = 1, limit = 20 } = {}) {
     let query = supabase
         .from("mcqs")
-        .select("id, question, option_a, option_b, option_c, option_d, correct_answer, subject, topic, difficulty", { count: "exact" });
+        .select("id, question, option_a, option_b, option_c, option_d, correct_answer, subject, topic, difficulty, created_at", { count: "exact" });
 
     if (subject) query = query.eq("subject", subject);
     if (difficulty) query = query.eq("difficulty", difficulty);

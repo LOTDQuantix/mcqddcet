@@ -42,6 +42,27 @@ export function validateMCQ(mcq, index) {
     if (opt.includes("all of the above") || opt.includes("none of the above")) {
       errors.push(`MCQ #${index + 1}: contains banned "All/None of the above" option`);
     }
+
+    // STRICT HYGIENE: No placeholders
+    if (opt.includes("correct") || opt.includes("distractor")) {
+      errors.push(`MCQ #${index + 1}: option contains blocked placeholder text ("correct" or "distractor")`);
+    }
+
+    // Hash/ID pattern check (e.g., abc123 or #123)
+    if (/[a-z0-9]{6}/.test(opt) || /#[0-9]/.test(opt)) {
+      // Only trigger if it looks like a debug hash, not a real word
+      const words = opt.split(/\s+/);
+      for (const w of words) {
+        if (/[a-z]{3,}[0-9]{1,}/.test(w) || /[0-9]{1,}[a-z]{3,}/.test(w)) {
+          errors.push(`MCQ #${index + 1}: option contains potential debug hash or ID fragment ("${w}")`);
+        }
+      }
+    }
+  }
+
+  // Question hygiene: No #ID-hash patterns
+  if (/#\d+-[a-z0-9]{5,}/.test(mcq.question)) {
+    errors.push(`MCQ #${index + 1}: question contains blocked debug ID/hash suffix`);
   }
 
   return { valid: errors.length === 0, errors };
