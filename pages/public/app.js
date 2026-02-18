@@ -7,12 +7,17 @@ const app = {
     content: document.getElementById('content'),
     score: { correct: 0, total: 0, seen: [] },
 
-    // Supabase Config (Injected via environment variables or manual config)
-    supabaseUrl: window.SUPABASE_URL || 'https://your-project.supabase.co',
-    supabaseKey: window.SUPABASE_ANON_KEY || 'your-anon-key',
+    // Supabase Config (Injected via environment variables or index.html)
+    supabaseUrl: window.SUPABASE_URL || 'https://ngisjclqxzvfdnphrnif.supabase.co',
+    supabaseKey: window.SUPABASE_ANON_KEY || '',
 
     init() {
-        window.addEventListener('popstate', () => this.route());
+        if (!this.supabaseKey || this.supabaseKey === 'your-anon-key-here') {
+            const msg = '⚠️ Supabase Anon Key is missing. Please set it in index.html or as an environment variable.';
+            console.error(msg);
+            this.setHTML(this.content, `<div class="card" style="border-color:var(--danger)"><h3>Configuration Required</h3><p class="mt">${msg}</p></div>`);
+            return;
+        }
         document.body.addEventListener('click', e => {
             const a = e.target.closest('a[href]');
             if (a && a.getAttribute('href').startsWith('/')) {
