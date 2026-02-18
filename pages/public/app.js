@@ -84,9 +84,11 @@ const app = {
             const clean = DOMPurify.sanitize(el.innerHTML, {
                 ALLOWED_TAGS: [
                     'h1', 'h2', 'h3', 'p', 'a', 'span', 'div', 'button', 'strong', 'i', 'br',
-                    'table', 'thead', 'tbody', 'tr', 'th', 'td', 'sup', 'sub'
+                    'table', 'thead', 'tbody', 'tr', 'th', 'td', 'sup', 'sub',
+                    // MathML tags for KaTeX resilience
+                    'math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'mtext'
                 ],
-                ADD_ATTR: ['onclick', 'data-key', 'data-correct', 'style', 'class', 'href', 'target']
+                ADD_ATTR: ['onclick', 'data-key', 'data-correct', 'style', 'class', 'href', 'target', 'aria-hidden']
             });
             el.innerHTML = clean;
         }

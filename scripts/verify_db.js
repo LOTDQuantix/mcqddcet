@@ -16,12 +16,24 @@ if (fs.existsSync(devVarsPath)) {
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 async function check() {
-    const { count, error } = await supabase.from("mcqs").select("*", { count: "exact", head: true });
-    if (error) console.error(error);
-    else console.log(`TOTAL MCQS IN DATABASE: ${count}`);
+    const { data: mcqs, error } = await supabase.from("mcqs")
+        .select("*")
+        .ilike("question", "%becomes double%")
+        .limit(1);
 
-    const { data: batches } = await supabase.from("batches").select("id, total_questions");
-    console.log("BATCHES:", batches);
+    if (error) {
+        console.error(error);
+    } else if (mcqs.length > 0) {
+        const q = mcqs[0];
+        console.log("EXACT DB STRINGS (JSON):");
+        console.log(`Question: ${JSON.stringify(q.question)}`);
+        console.log(`A: ${JSON.stringify(q.option_a)}`);
+        console.log(`B: ${JSON.stringify(q.option_b)}`);
+        console.log(`C: ${JSON.stringify(q.option_c)}`);
+        console.log(`D: ${JSON.stringify(q.option_d)}`);
+    } else {
+        console.log("MCQ NOT FOUND");
+    }
 }
 
 check();
