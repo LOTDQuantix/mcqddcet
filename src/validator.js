@@ -34,11 +34,11 @@ export function validateMCQ(mcq, index) {
   });
 
   // 3. Mathematical/Conceptual Value Check
-  // At least one option must contain a number, a LaTeX symbol ($), or be reasonably long (> 4 chars)
+  // At least one option must contain a number, a LaTeX symbol ($), or be reasonably long (>= 3 chars)
   const hasValue = options.some(opt =>
     /\d/.test(opt) ||
     opt.includes('$') ||
-    opt.trim().length > 5
+    opt.trim().length >= 3
   );
 
   if (!hasValue) {
