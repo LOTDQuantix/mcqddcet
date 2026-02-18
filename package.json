@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "generate": "node scripts/generate-local.js"
+    "generate": "node scripts/generate-local.js",
+    "test": "node src/tests.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1"

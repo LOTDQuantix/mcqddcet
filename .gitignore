@@ -1,4 +1,15 @@
-node_modules/
-.wrangler/
+.agent/
+.dc/
 .dev.vars
+.git/
+.wrangler/
+node_modules/
+package-lock.json
+wrangler.toml
+
+# Project Specific
+material/
+docs/
+.env
 *.log
+temp/
