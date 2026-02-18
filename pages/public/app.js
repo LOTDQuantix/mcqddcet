@@ -47,7 +47,7 @@ const app = {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.message || errorData.error || 'HTTP error! status: ' + response.status);
             }
-            
+
             const data = options.method === 'HEAD' ? null : await response.json();
             return {
                 data,
@@ -393,8 +393,8 @@ const app = {
                 recentBatches: latestBatchesRes.data
             };
 
-            const lastBatchDate = stats.recentBatches.length > 0 
-                ? new Date(stats.recentBatches[0].created_at).toLocaleDateString() 
+            const lastBatchDate = stats.recentBatches.length > 0
+                ? new Date(stats.recentBatches[0].created_at).toLocaleDateString()
                 : 'N/A';
 
             let batchHtml = stats.recentBatches.map(b => `
@@ -462,7 +462,7 @@ const app = {
 
         this.setHTML(this.content,
             '<h2 class="mt">Exam Mode</h2>' +
-            '<p style="color:var(--text-muted)">20 random questions. No instant feedback. 20 minutes timer.</p>' +
+            '<p style="color:var(--text-muted)">20 random questions. No instant feedback. 30 minutes timer.</p>' +
             '<div class="card mt">' +
             '<h3>Ready to start?</h3>' +
             '<div class="filter-bar mt">' +
@@ -472,28 +472,31 @@ const app = {
             '<option value="Physics">Physics</option>' +
             '</select>' +
             '</div>' +
-            '<button class="btn mt" onclick="app.startExam()">Start 20-Minute Exam</button>' +
+            '<button class="btn mt" onclick="app.startExam()">Start 30-Minute Exam</button>' +
             '</div>'
         );
     },
 
     async startExam() {
-        this.setHTML(this.content, '<div class="loader"></div>');
         const subj = document.getElementById('ef-subject').value;
+        this.setHTML(this.content, '<div class="loader"></div>');
 
-        let path = '/mcqs?select=*&limit=20';
+        let path = '/mcqs?select=*&limit=100';
         if (subj) path += `&subject=eq.${subj}`;
 
         try {
-            const data = await this.safeFetch(path);
+            const { data } = await this.safeFetch(path);
             if (!data || data.length === 0) throw new Error("No questions found");
+
+            const shuffled = data.sort(() => Math.random() - 0.5);
+            const selected = shuffled.slice(0, 20);
 
             this.exam = {
                 active: true,
-                questions: data.sort(() => Math.random() - 0.5),
+                questions: selected,
                 currentIndex: 0,
                 answers: {},
-                timeLeft: 1200, // 20 mins
+                timeLeft: 1800, // 30 mins
                 timerId: setInterval(() => this.tickExam(), 1000)
             };
             this.showExamQuestion();
@@ -519,38 +522,47 @@ const app = {
         const m = Math.floor(this.exam.timeLeft / 60);
         const s = this.exam.timeLeft % 60;
 
-        let html = '<div style="display:flex;justify-content:space-between;align-items:center" class="mt">' +
-            '<h2>Question ' + (this.exam.currentIndex + 1) + ' / ' + this.exam.questions.length + '</h2>' +
-            '<div class="exam-timer">Time Left: <span id="exam-timer-val">' + m + ':' + s.toString().padStart(2, '0') + '</span></div>' +
-            '</div>' +
-            '<div class="card mt">' +
-            '<h3>' + q.question + '</h3>' +
-            '<div class="q-meta"><span>' + q.subject + '</span><span>' + q.difficulty + '</span></div>' +
-            '<div id="options" style="margin-top:1.5rem">';
+        let html = `
+            <div style="display:flex;justify-content:space-between;align-items:center" class="mt">
+                <h2>Question ${this.exam.currentIndex + 1} / ${this.exam.questions.length}</h2>
+                <div class="exam-timer">Time Left: <span id="exam-timer-val">${m}:${s.toString().padStart(2, '0')}</span></div>
+            </div>
+            <div class="card mt">
+                <h3>${q.question}</h3>
+                <div class="q-meta"><span>${q.subject}</span><span>${q.difficulty}</span></div>
+                <div id="options" style="margin-top:1.5rem">
+        `;
 
         ['A', 'B', 'C', 'D'].forEach(key => {
             const text = q['option_' + key.toLowerCase()];
             const selected = this.exam.answers[this.exam.currentIndex] === key;
-            html += '<button class="mcq-option ' + (selected ? 'correct-highlight' : '') + '" onclick="app.saveExamAnswer(\'' + key + '\')">' +
-                '<strong>' + key + '.</strong> ' + text +
-                '</button>';
+            html += `
+                <button class="mcq-option ${selected ? 'correct-highlight' : ''}" onclick="app.saveExamAnswer('${key}')">
+                    <strong>${key}.</strong> ${text}
+                </button>
+            `;
         });
 
-        html += '</div>' +
-            '<div style="display:flex;justify-content:space-between" class="mt">' +
-            '<button class="btn btn-outline" ' + (this.exam.currentIndex === 0 ? 'disabled' : '') + ' onclick="app.moveExam(-1)">Previous</button>' +
-            (this.exam.currentIndex === this.exam.questions.length - 1 ?
-                '<button class="btn" onclick="app.finishExam()">Finish Exam</button>' :
-                '<button class="btn" onclick="app.moveExam(1)">Next Question</button>') +
-            '</div>' +
-            '</div>';
+        html += `
+                </div>
+                <div style="display:flex;justify-content:space-between" class="mt">
+                    <button class="btn btn-outline" ${this.exam.currentIndex === 0 ? 'disabled' : ''} onclick="app.moveExam(-1)">Previous</button>
+                    ${this.exam.currentIndex === this.exam.questions.length - 1 ?
+                `<button class="btn" style="background:var(--success)" onclick="app.finishExam()">Submit & Finish</button>` :
+                `<button class="btn" onclick="app.moveExam(1)">Next Question</button>`}
+                </div>
+            </div>
+        `;
 
         this.setHTML(this.content, html);
     },
 
     saveExamAnswer(key) {
         this.exam.answers[this.exam.currentIndex] = key;
-        this.showExamQuestion();
+        const btns = document.querySelectorAll('#options .mcq-option');
+        btns.forEach((btn, idx) => {
+            btn.classList.toggle('correct-highlight', ['A', 'B', 'C', 'D'][idx] === key);
+        });
     },
 
     moveExam(dir) {
@@ -559,21 +571,45 @@ const app = {
     },
 
     finishExam() {
+        if (!confirm('Are you sure you want to finish and submit?')) return;
         if (this.exam.timerId) clearInterval(this.exam.timerId);
+
         let correctCount = 0;
+        let resultHtml = '';
+
         this.exam.questions.forEach((q, i) => {
-            if (this.exam.answers[i] === q.correct_answer) correctCount++;
+            const userAns = this.exam.answers[i];
+            const isCorrect = userAns === q.correct_answer;
+            if (isCorrect) correctCount++;
+
+            resultHtml += `
+                <div class="card mt" style="border-left: 4px solid ${isCorrect ? 'var(--success)' : 'var(--danger)'}">
+                    <p><strong>${i + 1}. ${q.question}</strong></p>
+                    <div class="mt" style="font-size:0.9rem">
+                        <span style="color:${isCorrect ? 'var(--success)' : 'var(--danger)'}">
+                            Your Answer: ${userAns || 'Not Answered'}
+                        </span>
+                        ${!isCorrect ? ` | <span style="color:var(--success)">Correct: ${q.correct_answer}</span>` : ''}
+                    </div>
+                </div>
+            `;
         });
 
         const score = Math.round((correctCount / this.exam.questions.length) * 100);
         this.setHTML(this.content,
-            '<div class="hero"><h1>Exam Result</h1><p>You have successfully completed the exam.</p></div>' +
-            '<div class="card" style="text-align:center">' +
-            '<div class="stat-label">Your Score</div>' +
-            '<div class="stat-val">' + score + '%</div>' +
-            '<p class="mt">' + correctCount + ' correct out of ' + this.exam.questions.length + ' questions.</p>' +
-            '<a href="/exam" class="btn mt" onclick="app.exam.active=false;app.renderExam()">Try Again</a>' +
-            '</div>'
+            `<div class="hero">
+                <h1>Exam Results</h1>
+                <div class="stat-val" style="font-size:4rem">${score}%</div>
+                <p>${correctCount} / ${this.exam.questions.length} Correct</p>
+            </div>
+            <div class="mt">
+                <a href="/exam" class="btn" onclick="app.exam.active=false">Return to Exam Home</a>
+            </div>
+            <h3 class="mt" style="margin-top:2rem">Review Questions</h3>
+            ${resultHtml}
+            <div class="mt" style="padding-bottom:4rem">
+                 <a href="/exam" class="btn" onclick="app.exam.active=false">Return to Exam Home</a>
+            </div>`
         );
         this.exam.active = false;
     }
