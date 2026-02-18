@@ -170,7 +170,7 @@ const app = {
     },
 
     renderPractice() {
-        this.score = { correct: 0, total: 0, seen: [] };
+        this.score = { correct: 0, total: 0, seen: [], pool: [] };
         this.content.innerHTML =
             '<h2 class="mt">Practice Mode</h2>' +
             '<p style="color:var(--text-muted)">Practice conceptual questions. Select an option to see the result.</p>' +
@@ -186,7 +186,7 @@ const app = {
             '<option value="Medium">Medium</option>' +
             '<option value="Hard">Hard</option>' +
             '</select>' +
-            '<button class="btn btn-sm btn-outline" onclick="app.resetPractice()">Reset Score</button>' +
+            '<button class="btn btn-sm btn-outline" onclick="app.resetPractice()">Reset Session</button>' +
             '</div>' +
             '<div id="score-display" class="score-bar">' +
             '<span>Session Score:</span> <span class="score">0 / 0</span>' +
@@ -196,61 +196,101 @@ const app = {
     },
 
     resetPractice() {
-        this.score = { correct: 0, total: 0, seen: [] };
+        this.score = { correct: 0, total: 0, seen: [], pool: [] };
         const s = document.querySelector('#score-display .score');
         if (s) s.textContent = '0 / 0';
         this.loadQuestion();
     },
 
-    loadQuestion() {
-        var area = document.getElementById('question-area');
+    async loadQuestion() {
+        const area = document.getElementById('question-area');
         if (!area) return;
-        this.setHTML(area, '<div class="loader"></div>');
 
-        var subj = document.getElementById('pf-subject').value;
-        var diff = document.getElementById('pf-difficulty').value;
+        // If pool is empty or near empty, fetch more
+        const unseenInPool = this.score.pool.filter(q => !this.score.seen.includes(q.id));
 
-        // PostgREST doesn't have a direct random helper. 
-        // We fetch a batch of 20 and pick one that hasn't been seen.
-        let path = '/mcqs?select=*&limit=20';
-        if (subj) path += `&subject=eq.${subj}`;
-        if (diff) path += `&difficulty=eq.${diff}`;
+        if (unseenInPool.length === 0) {
+            this.setHTML(area, '<div class="loader"></div>');
 
-        this.safeFetch(path)
-            .then(({ data }) => {
+            const subj = document.getElementById('pf-subject').value;
+            const diff = document.getElementById('pf-difficulty').value;
+
+            try {
+                // 1. Get total count for this category
+                let countPath = '/mcqs?select=id';
+                if (subj) countPath += `&subject=eq.${subj}`;
+                if (diff) countPath += `&difficulty=eq.${diff}`;
+
+                const { headers } = await this.safeFetch(countPath, { method: 'HEAD' });
+                const contentRange = headers.get('content-range');
+                const total = contentRange ? parseInt(contentRange.split('/')[1]) : 0;
+
+                // 2. Fetch a random batch of 100
+                const batchSize = 100;
+                let from = 0;
+                if (total > batchSize) {
+                    from = Math.floor(Math.random() * (total - batchSize));
+                }
+                const to = from + batchSize - 1;
+
+                let path = `/mcqs?select=*&limit=${batchSize}`;
+                if (subj) path += `&subject=eq.${subj}`;
+                if (diff) path += `&difficulty=eq.${diff}`;
+
+                const { data } = await this.safeFetch(path, {
+                    headers: { 'Range': `${from}-${to}` }
+                });
+
                 if (!data || data.length === 0) throw new Error("No questions found");
 
-                // Pick one random question from the batch that isn't in seen list
-                const unseen = data.filter(q => !this.score.seen.includes(q.id));
-                const q = unseen.length > 0
-                    ? unseen[Math.floor(Math.random() * unseen.length)]
-                    : data[Math.floor(Math.random() * data.length)];
+                // Shuffle the new batch
+                this.score.pool = data.sort(() => Math.random() - 0.5);
 
-                this.score.seen.push(q.id);
-                var opts = [
-                    { key: 'A', text: q.option_a },
-                    { key: 'B', text: q.option_b },
-                    { key: 'C', text: q.option_c },
-                    { key: 'D', text: q.option_d }
-                ];
-                var html = '<div class="card">' +
-                    '<h3 style="margin-bottom:0.5rem">' + q.question + '</h3>' +
-                    '<div class="q-meta"><span>' + q.subject + '</span><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
-                    '<div id="options" style="margin-top:1.5rem">';
-                opts.forEach(function (o) {
-                    html += '<button class="mcq-option" data-key="' + o.key + '" data-correct="' + q.correct_answer + '" onclick="app.selectAnswer(this)">' +
-                        '<strong>' + o.key + '.</strong> ' + o.text +
-                        '</button>';
-                });
-                html += '</div>' +
-                    '<div id="feedback" class="hidden mt"></div>' +
-                    '<button id="next-btn" class="btn mt hidden" onclick="app.loadQuestion()">Next Question →</button>' +
-                    '</div>';
-                this.setHTML(area, html);
-            })
-            .catch(e => {
-                this.setHTML(area, '<div class="card" style="border-color:red"><p>Error loading question: ' + e.message + '</p></div>');
-            });
+                // After fetching, check for truly unseen questions
+                const freshUnseen = this.score.pool.filter(q => !this.score.seen.includes(q.id));
+
+                if (freshUnseen.length === 0) {
+                    this.setHTML(area, '<div class="card" style="text-align:center"><h3>Session Complete!</h3><p class="mt">You have completed all available questions in this category.</p><button class="btn mt" onclick="app.resetPractice()">Start Over</button></div>');
+                    return;
+                }
+
+                this.displayQuestion(freshUnseen[0]);
+            } catch (e) {
+                this.setHTML(area, '<div class="card" style="border-color:red"><p>Error: ' + e.message + '</p></div>');
+            }
+        } else {
+            this.displayQuestion(unseenInPool[0]);
+        }
+    },
+
+    displayQuestion(q) {
+        const area = document.getElementById('question-area');
+        this.score.seen.push(q.id);
+
+        const opts = [
+            { key: 'A', text: q.option_a },
+            { key: 'B', text: q.option_b },
+            { key: 'C', text: q.option_c },
+            { key: 'D', text: q.option_d }
+        ];
+
+        let html = '<div class="card">' +
+            '<h3 style="margin-bottom:0.5rem">' + q.question + '</h3>' +
+            '<div class="q-meta"><span>' + q.subject + '</span><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
+            '<div id="options" style="margin-top:1.5rem">';
+
+        opts.forEach(o => {
+            html += '<button class="mcq-option" data-key="' + o.key + '" data-correct="' + q.correct_answer + '" onclick="app.selectAnswer(this)">' +
+                '<strong>' + o.key + '.</strong> ' + o.text +
+                '</button>';
+        });
+
+        html += '</div>' +
+            '<div id="feedback" class="hidden mt"></div>' +
+            '<button id="next-btn" class="btn mt hidden" onclick="app.loadQuestion()">Next Question →</button>' +
+            '</div>';
+
+        this.setHTML(area, html);
     },
 
     selectAnswer(btn) {

@@ -396,3 +396,130 @@ Confirm:
 Do not rewrite entire app.
 Patch current structure cleanly.
 Preserve existing architecture.
+
+We need to fix two serious issues:
+
+1) Practice mode repeats questions after ~20–23 questions.
+2) Some MCQs contain meaningless or malformed options like "pm2".
+
+This is both a frontend logic issue AND a database content quality issue.
+
+Do NOT reintroduce Worker.
+Do NOT weaken RLS.
+Keep Pages → Supabase architecture.
+
+----------------------------------------
+PART 1 — PRACTICE MODE DUPLICATION FIX
+----------------------------------------
+
+Problem:
+Practice mode likely:
+- Fetches limited results (default 20)
+- Or re-fetches same ordered set
+- Or cycles index incorrectly
+- Or uses no offset/pagination
+
+Required Fix:
+
+1. Fetch larger dataset at once:
+   - Fetch 100 questions per session
+   OR
+   - Fetch total count first
+   - Then fetch random offset batches
+
+2. Maintain client-side session state:
+   - Keep a Set of solved question IDs.
+   - Do NOT show a question twice in same session.
+   - When exhausted, show message:
+     "You’ve completed all available questions."
+
+3. If using pagination:
+   - Use:
+     ?select=*&limit=100&offset=0
+   - Or:
+     order=id.asc
+   - Or:
+     order=random()
+
+4. Ensure:
+   - No automatic re-fetch loops.
+   - No cycling back to index 0.
+   - No implicit slicing to 20.
+
+Return:
+- Updated practice fetch logic.
+- Session tracking implementation.
+- Clear stop condition.
+
+----------------------------------------
+PART 2 — DATABASE CONTENT AUDIT
+----------------------------------------
+
+We need to audit and clean malformed content like:
+
+- "pm2"
+- Broken LaTeX
+- Incomplete expressions
+- Truncated vectors
+- Leftover placeholder fragments
+
+Tasks:
+
+1. Query database for suspicious patterns:
+   - option like '%pm%'
+   - question like '%pm%'
+   - question like '%sqrt%'
+   - question like '%vec%'
+   - question like '%tan^2%'
+   - question like '%\\%\\%\\%'
+   - Any non-LaTeX math fragments
+
+2. Return:
+   - List of affected rows (id + question)
+   - Count of malformed entries
+
+3. If count is small:
+   - Fix in-place via SQL replace
+   OR
+   - Regenerate only affected rows
+
+4. Add generator-level safeguard:
+   Reject options matching:
+   - /^pm\d+$/i
+   - /^[a-z]{1,3}\d?$/i (meaningless fragments)
+   - Partial LaTeX tokens
+
+----------------------------------------
+PART 3 — CONTENT QUALITY ENFORCEMENT
+----------------------------------------
+
+Before inserting any new MCQ:
+
+Add validation:
+
+- All 4 options must be meaningful.
+- At least one option must contain mathematical or conceptual value.
+- Reject empty strings.
+- Reject strings shorter than 2 characters.
+- Reject plain fragments like:
+  "pm2"
+  "veca"
+  "cdot"
+  "times"
+
+----------------------------------------
+PART 4 — FINAL VERIFICATION
+----------------------------------------
+
+Return:
+
+1. Updated practice mode logic.
+2. SQL audit queries used.
+3. List of cleaned or regenerated rows.
+4. Confirmation no malformed patterns remain.
+5. Confirmation practice mode no longer repeats questions within session.
+
+Do not rewrite entire frontend.
+Patch current logic cleanly.
+Preserve KaTeX stability.
+
