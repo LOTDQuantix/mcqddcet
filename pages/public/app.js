@@ -48,7 +48,7 @@ const app = {
                 throw new Error(errorData.message || errorData.error || 'HTTP error! status: ' + response.status);
             }
             
-            const data = await response.json();
+            const data = options.method === 'HEAD' ? null : await response.json();
             return {
                 data,
                 headers: response.headers
