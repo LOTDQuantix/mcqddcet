@@ -59,21 +59,12 @@ const app = {
     },
 
     setHTML(el, html) {
-        if (window.DOMPurify) {
-            el.innerHTML = DOMPurify.sanitize(html, {
-                ALLOWED_TAGS: ['h1', 'h2', 'h3', 'p', 'a', 'span', 'div', 'button', 'strong', 'i', 'br', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
-                ADD_ATTR: ['onclick', 'data-key', 'data-correct', 'style', 'class', 'href', 'target'], // onclick is needed for the SPA buttons
-                FORCE_INDIAN_MATH: true // placeholder for math preservation
-            });
-        } else {
-            el.innerHTML = html;
-        }
-    },
+        el.innerHTML = html; // Insert raw LaTeX first
 
-    renderMath() {
+        // Render math immediately on this container
         if (window.renderMathInElement) {
             try {
-                renderMathInElement(document.body, {
+                renderMathInElement(el, {
                     delimiters: [
                         { left: '$$', right: '$$', display: true },
                         { left: '$', right: '$', display: false },
@@ -81,12 +72,23 @@ const app = {
                         { left: '\\\\[', right: '\\\\]', display: true }
                     ],
                     throwOnError: false,
-                    trust: true,
                     strict: false
                 });
             } catch (e) {
-                console.error("Math rendering error:", e);
+                console.error("KaTeX render error:", e);
             }
+        }
+
+        // THEN sanitize non-math content
+        if (window.DOMPurify) {
+            const clean = DOMPurify.sanitize(el.innerHTML, {
+                ALLOWED_TAGS: [
+                    'h1', 'h2', 'h3', 'p', 'a', 'span', 'div', 'button', 'strong', 'i', 'br',
+                    'table', 'thead', 'tbody', 'tr', 'th', 'td', 'sup', 'sub'
+                ],
+                ADD_ATTR: ['onclick', 'data-key', 'data-correct', 'style', 'class', 'href', 'target']
+            });
+            el.innerHTML = clean;
         }
     },
 
@@ -147,7 +149,6 @@ const app = {
                 '<div class="stat-val" style="color:var(--success)">Decoupled</div>' +
                 '</div>' +
                 '</div>');
-            this.renderMath();
         }).catch(e => {
             this.setHTML(this.content, '<div class="card" style="border-color:red"><h3>Supabase Connection Error</h3><p class="mt">' + e.message + '</p></div>');
         });
@@ -231,7 +232,6 @@ const app = {
                     '<button id="next-btn" class="btn mt hidden" onclick="app.loadQuestion()">Next Question →</button>' +
                     '</div>';
                 this.setHTML(area, html);
-                this.renderMath();
             })
             .catch(e => {
                 this.setHTML(area, '<div class="card" style="border-color:red"><p>Error loading question: ' + e.message + '</p></div>');
@@ -263,7 +263,6 @@ const app = {
         feedback.classList.remove('hidden');
         nextBtn.classList.remove('hidden');
         document.querySelector('#score-display .score').textContent = this.score.correct + ' / ' + this.score.total;
-        this.renderMath();
     },
 
     renderBrowse() {
@@ -352,7 +351,6 @@ const app = {
                 if (data.length === limit) pagHtml += '<button class="btn btn-sm btn-outline" onclick="app.browsePage(' + (page + 1) + ')">Next</button>';
 
                 this.setHTML(pagDiv, pagHtml);
-                this.renderMath();
             })
             .catch(e => {
                 this.setHTML(list, '<div class="card" style="border-color:red"><p>Error: ' + e.message + '</p></div>');
@@ -476,7 +474,6 @@ const app = {
             '</div>';
 
         this.setHTML(this.content, html);
-        this.renderMath();
     },
 
     saveExamAnswer(key) {
