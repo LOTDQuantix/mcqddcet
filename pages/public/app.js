@@ -47,8 +47,12 @@ const app = {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.message || errorData.error || 'HTTP error! status: ' + response.status);
             }
-            // Supabase returns results as arrays for selects
-            return await response.json();
+            
+            const data = await response.json();
+            return {
+                data,
+                headers: response.headers
+            };
         } catch (e) {
             if (retries > 0) {
                 console.warn('Retrying fetch: ' + path + ' (' + retries + ' left)');
@@ -112,20 +116,25 @@ const app = {
     renderHome() {
         this.setHTML(this.content, '<div class="loader"></div>');
 
+        const getCount = (res) => {
+            const range = res.headers.get('content-range');
+            return range ? range.split('/').pop() : 0;
+        };
+
         // Fetch stats from Supabase directly
         Promise.all([
-            this.safeFetch('/mcqs?select=id', { headers: { 'Prefer': 'count=exact', 'Range': '0-0' } }),
-            this.safeFetch('/mcqs?subject=eq.Maths&select=id', { headers: { 'Prefer': 'count=exact', 'Range': '0-0' } }),
-            this.safeFetch('/mcqs?subject=eq.Physics&select=id', { headers: { 'Prefer': 'count=exact', 'Range': '0-0' } })
-        ]).then(([total, maths, physics]) => {
+            this.safeFetch('/mcqs?select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' }),
+            this.safeFetch('/mcqs?subject=eq.Maths&select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' }),
+            this.safeFetch('/mcqs?subject=eq.Physics&select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' }),
+            this.safeFetch('/batches?select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' })
+        ]).then(([totalRes, mathsRes, physicsRes, batchesRes]) => {
             const stats = {
-                total: total.length === 0 ? 0 : (total.length), // Placeholder if count header not parsed
-                Maths: maths.length === 0 ? 0 : 0,
-                Physics: physics.length === 0 ? 0 : 0
+                total: getCount(totalRes),
+                Maths: getCount(mathsRes),
+                Physics: getCount(physicsRes),
+                Batches: getCount(batchesRes)
             };
 
-            // Note: In real fetch, we would read the 'Content-Range' header for exact counts. 
-            // For simplicity in this demo, we'll try to find metadata or just show the total.
             this.setHTML(this.content,
                 '<div class="hero">' +
                 '<h1>DDCET MCQ Practice</h1>' +
@@ -137,21 +146,25 @@ const app = {
                 '</div>' +
                 '</div>' +
                 '<div class="grid">' +
-                '<div class="card" style="text-align:center">' +
-                '<div class="stat-label">Database Connected</div>' +
-                '<div class="stat-val" style="font-size:1.5rem">SUPABASE REST</div>' +
-                '<p class="mt" style="font-size:0.8rem;color:var(--text-muted)">Read-only access enabled</p>' +
+                '<div class="card stat-card">' +
+                '<div class="stat-label">Total MCQs</div>' +
+                '<div class="stat-val">' + stats.total + '</div>' +
                 '</div>' +
-                '<div class="card" style="text-align:center">' +
-                '<div class="stat-label">Maths & Physics</div>' +
-                '<div class="stat-val">Live</div>' +
+                '<div class="card stat-card">' +
+                '<div class="stat-label">Maths Questions</div>' +
+                '<div class="stat-val">' + stats.Maths + '</div>' +
                 '</div>' +
-                '<div class="card" style="text-align:center">' +
-                '<div class="stat-label">Platform Status</div>' +
-                '<div class="stat-val" style="color:var(--success)">Decoupled</div>' +
+                '<div class="card stat-card">' +
+                '<div class="stat-label">Physics Questions</div>' +
+                '<div class="stat-val">' + stats.Physics + '</div>' +
+                '</div>' +
+                '<div class="card stat-card">' +
+                '<div class="stat-label">Total Batches</div>' +
+                '<div class="stat-val">' + stats.Batches + '</div>' +
                 '</div>' +
                 '</div>');
         }).catch(e => {
+            console.error("Home stats error:", e);
             this.setHTML(this.content, '<div class="card" style="border-color:red"><h3>Supabase Connection Error</h3><p class="mt">' + e.message + '</p></div>');
         });
     },
@@ -204,7 +217,7 @@ const app = {
         if (diff) path += `&difficulty=eq.${diff}`;
 
         this.safeFetch(path)
-            .then(data => {
+            .then(({ data }) => {
                 if (!data || data.length === 0) throw new Error("No questions found");
 
                 // Pick one random question from the batch that isn't in seen list
@@ -312,7 +325,7 @@ const app = {
         if (diff) path += `&difficulty=eq.${diff}`;
 
         this.safeFetch(path, { headers: { 'Range': `${from}-${to}` } })
-            .then(data => {
+            .then(({ data }) => {
                 if (!data || data.length === 0) {
                     this.setHTML(list, '<div class="card"><p>No questions found for these filters.</p></div>');
                     pagDiv.innerHTML = '';
@@ -359,18 +372,75 @@ const app = {
             });
     },
 
-    renderAdmin() {
-        this.setHTML(this.content,
-            '<h2 class="mt">Admin Tools</h2>' +
-            '<p style="color:var(--text-muted)">Generation is now handled via local scripts only.</p>' +
-            '<div class="card mt">' +
-            '<h3>Worker-less Architecture</h3>' +
-            '<p class="mt" style="font-size:0.9rem">The Cloudflare Worker has been removed. You are connecting directly to Supabase REST API.</p>' +
-            '<div class="mt" style="padding:1rem;background:rgba(0,188,212,0.1);border-radius:8px">' +
-            '<code style="color:var(--primary)">Architecture: Pages $\to$ Supabase REST</code>' +
-            '</div>' +
-            '</div>'
-        );
+    async renderAdmin() {
+        this.setHTML(this.content, '<div class="loader"></div>');
+
+        const getCount = (res) => {
+            const range = res.headers.get('content-range');
+            return range ? range.split('/').pop() : 0;
+        };
+
+        try {
+            const [totalRes, batchesRes, latestBatchesRes] = await Promise.all([
+                this.safeFetch('/mcqs?select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' }),
+                this.safeFetch('/batches?select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' }),
+                this.safeFetch('/batches?select=*&order=created_at.desc&limit=5')
+            ]);
+
+            const stats = {
+                totalMCQs: getCount(totalRes),
+                totalBatches: getCount(batchesRes),
+                recentBatches: latestBatchesRes.data
+            };
+
+            const lastBatchDate = stats.recentBatches.length > 0 
+                ? new Date(stats.recentBatches[0].created_at).toLocaleDateString() 
+                : 'N/A';
+
+            let batchHtml = stats.recentBatches.map(b => `
+                <div class="card mt" style="padding:1rem; border-left: 4px solid var(--primary)">
+                    <div style="display:flex; justify-content:space-between; align-items:center">
+                        <strong>${b.id}</strong>
+                        <span class="q-meta">${new Date(b.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="mt" style="font-size:0.85rem">
+                        <span>Questions: ${b.total_questions}</span> | 
+                        <span>Status: <span style="color:${b.status === 'completed' ? 'var(--success)' : 'var(--danger)'}">${b.status}</span></span>
+                    </div>
+                </div>
+            `).join('');
+
+            this.setHTML(this.content, `
+                <h2 class="mt">Admin Dashboard</h2>
+                <p style="color:var(--text-muted)">Read-only view of platform database status.</p>
+                
+                <div class="grid mt">
+                    <div class="card" style="text-align:center">
+                        <div class="stat-label">Total MCQs</div>
+                        <div class="stat-val">${stats.totalMCQs}</div>
+                    </div>
+                    <div class="card" style="text-align:center">
+                        <div class="stat-label">Total Batches</div>
+                        <div class="stat-val">${stats.totalBatches}</div>
+                    </div>
+                    <div class="card" style="text-align:center">
+                        <div class="stat-label">Last Batch</div>
+                        <div class="stat-val" style="font-size:1.2rem">${lastBatchDate}</div>
+                    </div>
+                </div>
+
+                <h3 class="mt">Recent Batches</h3>
+                ${stats.recentBatches.length > 0 ? batchHtml : '<p class="mt">No batches found.</p>'}
+                
+                <div class="card mt" style="background:rgba(0,188,212,0.05)">
+                    <h3>Maintenance Note</h3>
+                    <p class="mt" style="font-size:0.9rem">Generation logic has been moved to local scripts for security. Use <code>npm run generate</code> to add new questions.</p>
+                </div>
+            `);
+        } catch (e) {
+            console.error("Admin render error:", e);
+            this.setHTML(this.content, `<div class="card" style="border-color:var(--danger)"><h3>Admin Load Error</h3><p class="mt">${e.message}</p></div>`);
+        }
     },
 
     triggerGen() {

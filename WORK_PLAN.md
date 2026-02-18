@@ -284,3 +284,115 @@ Do NOT weaken hashing or deduplication logic.
 Preserve all Phase 1–5 improvements.
 
 This is an architectural separation task, not a rewrite.
+
+We need to fix 3 major frontend issues in the Worker-less Pages → Supabase architecture.
+
+Current Problems:
+1. Admin page UI is broken / not useful.
+2. Exam mode is not functioning properly.
+3. Home page does not show total MCQ count.
+
+This is a frontend logic + Supabase query issue.
+
+Do NOT reintroduce Worker.
+Do NOT change database structure.
+Do NOT weaken RLS.
+
+----------------------------------------
+PART 1 — HOME PAGE TOTAL MCQ COUNT
+----------------------------------------
+
+Add a visible stat card on Home page showing:
+
+- Total MCQs
+- Total Maths
+- Total Physics
+- Total Batches (if table exists)
+
+Implementation:
+
+1. Use Supabase REST count:
+   /rest/v1/mcqs?select=*&count=exact&head=true
+
+2. Fetch total count from response header:
+   content-range
+
+3. Display counts in a clean stats section on homepage.
+
+Return:
+- Updated fetch snippet
+- UI markup
+- Count extraction logic
+
+----------------------------------------
+PART 2 — ADMIN PAGE CLEANUP
+----------------------------------------
+
+Current admin page is visually weak and functionally empty.
+
+Fix it to:
+
+1. Show:
+   - Total MCQs
+   - Last batch date
+   - Total batches
+   - Recent 5 batch summaries
+
+2. Remove Worker references.
+3. Remove outdated architecture message.
+4. Make it read-only dashboard.
+
+Use Supabase REST queries only.
+
+Return:
+- Updated admin rendering function
+- Supabase queries used
+- Clean UI structure
+
+----------------------------------------
+PART 3 — EXAM MODE FIX
+----------------------------------------
+
+Exam mode currently broken.
+
+Fix requirements:
+
+1. Fetch random 20 MCQs.
+   Use Supabase:
+   order=random()
+
+2. Lock options once selected.
+3. Add:
+   - Timer (30 minutes default)
+   - Score tracking
+   - Submit button
+   - Results screen with score + correct answers
+
+4. Ensure:
+   - No re-fetch mid exam
+   - No UI crash
+   - Proper KaTeX rendering
+
+Return:
+- Exam fetch logic
+- State management structure
+- Timer implementation
+- Score calculation logic
+- Result screen UI snippet
+
+----------------------------------------
+PART 4 — FINAL VERIFICATION
+----------------------------------------
+
+Confirm:
+
+- Home page shows total count correctly.
+- Admin page displays real stats.
+- Exam mode loads 20 random questions.
+- Timer counts down properly.
+- Score calculates correctly.
+- KaTeX renders inside exam mode.
+
+Do not rewrite entire app.
+Patch current structure cleanly.
+Preserve existing architecture.
