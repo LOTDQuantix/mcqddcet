@@ -192,7 +192,9 @@ const app = {
 
             this.setHTML(this.content,
                 '<div class="hero">' +
-                '<lottie-player src="https://lottie.host/9e0a2992-0545-4de4-a461-893098528994/hN2jJjAEvM.json" background="transparent" speed="1" style="width: 200px; height: 200px;" loop autoplay></lottie-player>' +
+                '<div class="hero-icon-wrapper pulse">' +
+                '<i data-lucide="book-open" style="width: 100px; height: 100px; color: var(--primary)"></i>' +
+                '</div>' +
                 '<h1>DDCET MCQ Practice</h1>' +
                 '<p>Conceptual MCQs for Maths & Physics. Practice directly with Supabase.</p>' +
                 '<div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:2rem">' +
@@ -563,7 +565,7 @@ const app = {
     },
 
     async renderDashboard() {
-        this.setHTML(this.content, '<div class="loader"></div>');
+        this.setHTML(this.content, '<div class="loader"><i data-lucide="loader-2" class="spin"></i></div>');
         try {
             const { data: historyData } = await this.safeFetch(`/user_exam_history?user_id=eq.${this.user.id}&order=created_at.desc`);
 
@@ -602,7 +604,9 @@ const app = {
 
             this.setHTML(this.content, `
                 <div class="hero">
-                    <lottie-player src="https://lottie.host/ef0b3967-0c7f-4422-92fc-5fa8c9354045/L8zB31rT7m.json" background="transparent" speed="1" style="width: 150px; height: 150px;" loop autoplay></lottie-player>
+                    <div class="hero-icon-wrapper pulse">
+                        <i data-lucide="award" style="width: 80px; height: 80px; color: var(--primary)"></i>
+                    </div>
                     <h1>Welcome, ${this.user.username}!</h1>
                     <p>Your Exam Performance Overview</p>
                 </div>
@@ -856,7 +860,7 @@ const app = {
         this.setHTML(this.content,
             `<div class="hero">
                 <h1>Exam Results</h1>
-                <div class="stat-val" style="font-size:4rem">${scorePct}%</div>
+                <div class="stat-val pulse" style="font-size:4rem">${scorePct}%</div>
                 <p>${correctCount} / ${this.exam.questions.length} Correct</p>
             </div>
             <div class="mt">

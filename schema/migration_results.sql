@@ -2,11 +2,13 @@
 -- 1. Add 'results' column if it doesn't exist
 ALTER TABLE user_exam_history ADD COLUMN IF NOT EXISTS results JSONB;
 
--- 2. Drop old column if it exists (optional, keeping it safe for now)
--- ALTER TABLE user_exam_history DROP COLUMN IF EXISTS attempted_question_ids;
+-- 2. Drop OLD column that is causing "NOT NULL" errors
+ALTER TABLE user_exam_history DROP COLUMN IF EXISTS attempted_question_ids;
 
--- 3. Ensure results is NOT NULL (if you have existing data, you might need a default first)
--- ALTER TABLE user_exam_history ALTER COLUMN results SET NOT NULL;
+-- 3. Set results to NOT NULL with a default if it's currently nullable
+ALTER TABLE user_exam_history ALTER COLUMN results SET DEFAULT '[]';
+UPDATE user_exam_history SET results = '[]' WHERE results IS NULL;
+ALTER TABLE user_exam_history ALTER COLUMN results SET NOT NULL;
 
 -- 4. Re-apply policies using DO blocks to avoid "already exists" errors
 DO $$ 

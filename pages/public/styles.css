@@ -90,7 +90,8 @@ nav {
     text-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
 }
 
-.nav-links i, .nav-links .icon {
+.nav-links i,
+.nav-links .icon {
     width: 1.15rem;
     height: 1.15rem;
     display: inline-block;
@@ -387,6 +388,43 @@ lottie-player {
     100% {
         transform: rotate(360deg);
     }
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.spin {
+    animation: rotation 1.5s linear infinite;
+}
+
+.pulse {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.hero-icon-wrapper {
+    margin-bottom: 1.5rem;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--primary-soft);
+    padding: 2rem;
+    border-radius: 50%;
+    border: 1px solid var(--primary);
+    box-shadow: 0 0 30px var(--primary-soft);
 }
 
 /* Responsive */
