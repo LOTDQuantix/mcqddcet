@@ -113,6 +113,16 @@ const app = {
             });
             el.innerHTML = clean;
         }
+
+        // Trigger Lucide icons
+        if (window.lucide) {
+            lucide.createIcons({
+                attrs: {
+                    'stroke-width': 2,
+                    'class': 'icon'
+                }
+            });
+        }
     },
 
     route() {
@@ -146,13 +156,16 @@ const app = {
         if (authLinks) {
             if (this.user) {
                 authLinks.innerHTML = `
-                    <a href="/dashboard">Dashboard</a>
-                    <a href="#" onclick="event.preventDefault(); app.logout()">Logout</a>
+                    <a href="/dashboard"><i data-lucide="layout-dashboard"></i>Dashboard</a>
+                    <a href="#" onclick="event.preventDefault(); app.logout()"><i data-lucide="log-out"></i>Logout</a>
                 `;
             } else {
-                authLinks.innerHTML = `<a href="/login">Login</a>`;
+                authLinks.innerHTML = `<a href="/login"><i data-lucide="log-in"></i>Login</a>`;
             }
         }
+
+        // Re-run lucide on nav if needed
+        if (window.lucide) lucide.createIcons();
     },
 
     renderHome() {
@@ -179,28 +192,33 @@ const app = {
 
             this.setHTML(this.content,
                 '<div class="hero">' +
+                '<lottie-player src="https://assets10.lottiefiles.com/packages/lf20_m6cuL6.json" background="transparent" speed="1" style="width: 200px; height: 200px;" loop autoplay></lottie-player>' +
                 '<h1>DDCET MCQ Practice</h1>' +
                 '<p>Conceptual MCQs for Maths & Physics. Practice directly with Supabase.</p>' +
-                '<div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">' +
-                '<a href="/practice" class="btn">Practice Mode</a>' +
-                '<a href="/exam" class="btn btn-outline" style="border-color:var(--danger);color:var(--danger)">Exam Mode (Timed)</a>' +
-                '<a href="/browse" class="btn btn-outline">Browse All</a>' +
+                '<div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:2rem">' +
+                '<a href="/practice" class="btn"><i data-lucide="play-circle"></i>Practice Mode</a>' +
+                '<a href="/exam" class="btn btn-outline" style="border-color:var(--danger);color:var(--danger)"><i data-lucide="clock"></i>Exam Mode (Timed)</a>' +
+                '<a href="/browse" class="btn btn-outline"><i data-lucide="layers"></i>Browse All</a>' +
                 '</div>' +
                 '</div>' +
                 '<div class="grid">' +
                 '<div class="card stat-card">' +
+                '<i data-lucide="database" class="mt" style="color:var(--primary)"></i>' +
                 '<div class="stat-label">Total MCQs</div>' +
                 '<div class="stat-val">' + stats.total + '</div>' +
                 '</div>' +
                 '<div class="card stat-card">' +
+                '<i data-lucide="sigma" class="mt" style="color:var(--primary)"></i>' +
                 '<div class="stat-label">Maths Questions</div>' +
                 '<div class="stat-val">' + stats.Maths + '</div>' +
                 '</div>' +
                 '<div class="card stat-card">' +
+                '<i data-lucide="atom" class="mt" style="color:var(--primary)"></i>' +
                 '<div class="stat-label">Physics Questions</div>' +
                 '<div class="stat-val">' + stats.Physics + '</div>' +
                 '</div>' +
                 '<div class="card stat-card">' +
+                '<i data-lucide="box" class="mt" style="color:var(--primary)"></i>' +
                 '<div class="stat-label">Total Batches</div>' +
                 '<div class="stat-val">' + stats.Batches + '</div>' +
                 '</div>' +
@@ -212,11 +230,14 @@ const app = {
     },
 
     renderPractice() {
-        this.score = { correct: 0, total: 0, seen: [], pool: [] };
-        this.content.innerHTML =
+        // Persist seen between resets to avoid duplicates
+        const sessionSeen = JSON.parse(sessionStorage.getItem('ddcet_seen_global') || '[]');
+        this.score = { correct: 0, total: 0, seen: [], globalSeen: sessionSeen, pool: [] };
+
+        this.setHTML(this.content,
             '<h2 class="mt">Practice Mode</h2>' +
             '<p style="color:var(--text-muted)">Practice conceptual questions. Select an option to see the result.</p>' +
-            '<div class="filter-bar mt">' +
+            '<div class="filter-bar mt" style="display:grid;grid-template-columns:1fr 1fr auto;gap:1rem;align-items:center">' +
             '<select id="pf-subject" onchange="app.resetPractice()">' +
             '<option value="">All Subjects</option>' +
             '<option value="Maths">Maths</option>' +
@@ -228,34 +249,37 @@ const app = {
             '<option value="Medium">Medium</option>' +
             '<option value="Hard">Hard</option>' +
             '</select>' +
-            '<button class="btn btn-sm btn-outline" onclick="app.resetPractice()">Reset Session</button>' +
+            '<button class="btn btn-outline" onclick="app.resetPractice()"><i data-lucide="rotate-ccw"></i>Reset</button>' +
             '</div>' +
             '<div id="score-display" class="score-bar">' +
-            '<span>Session Score:</span> <span class="score">0 / 0</span>' +
+            '<span><i data-lucide="target" style="vertical-align:middle;margin-right:0.5rem"></i>Session Score:</span> <span class="score">0 / 0</span>' +
             '</div>' +
-            '<div id="question-area"><div class="loader"></div></div>';
+            '<div id="question-area"><div class="loader"></div></div>');
         this.loadQuestion();
     },
 
     resetPractice() {
-        this.score = { correct: 0, total: 0, seen: [], pool: [] };
+        // Keep globalSeen but reset local session score
+        this.score.correct = 0;
+        this.score.total = 0;
+        this.score.seen = [];
+        this.score.pool = [];
         const s = document.querySelector('#score-display .score');
         if (s) s.textContent = '0 / 0';
-        this.loadQuestion();
     },
 
     async loadQuestion() {
         const area = document.getElementById('question-area');
         if (!area) return;
 
+        const subj = document.getElementById('pf-subject').value;
+        const diff = document.getElementById('pf-difficulty').value;
+
         // If pool is empty or near empty, fetch more
-        const unseenInPool = this.score.pool.filter(q => !this.score.seen.includes(q.id));
+        const unseenInPool = this.score.pool.filter(q => !this.score.globalSeen.includes(q.id));
 
         if (unseenInPool.length === 0) {
             this.setHTML(area, '<div class="loader"></div>');
-
-            const subj = document.getElementById('pf-subject').value;
-            const diff = document.getElementById('pf-difficulty').value;
 
             try {
                 // 1. Get total count for this category
@@ -267,7 +291,7 @@ const app = {
                 const contentRange = headers.get('content-range');
                 const total = contentRange ? parseInt(contentRange.split('/')[1]) : 0;
 
-                // 2. Fetch a random batch of 100
+                // 2. Fetch a random batch of 100 with random offset
                 const batchSize = 100;
                 let from = 0;
                 if (total > batchSize) {
@@ -285,18 +309,25 @@ const app = {
 
                 if (!data || data.length === 0) throw new Error("No questions found");
 
-                // Shuffle the new batch
-                this.score.pool = data.sort(() => Math.random() - 0.5);
-
-                // After fetching, check for truly unseen questions
-                const freshUnseen = this.score.pool.filter(q => !this.score.seen.includes(q.id));
+                // Filter out globalSeen before sorting
+                const freshUnseen = data.filter(q => !this.score.globalSeen.includes(q.id));
 
                 if (freshUnseen.length === 0) {
-                    this.setHTML(area, '<div class="card" style="text-align:center"><h3>Session Complete!</h3><p class="mt">You have completed all available questions in this category.</p><button class="btn mt" onclick="app.resetPractice()">Start Over</button></div>');
+                    this.setHTML(area, `
+                        <div class="card" style="text-align:center;animation:slideUp 0.6s ease">
+                            <lottie-player src="https://assets9.lottiefiles.com/packages/lf20_touohxv0.json" background="transparent" speed="1" style="width: 200px; height: 200px;" loop autoplay></lottie-player>
+                            <h3>Session Complete!</h3>
+                            <p class="mt">Wow! You've gone through all available questions in this category.</p>
+                            <button class="btn mt" onclick="app.score.globalSeen=[]; sessionStorage.removeItem('ddcet_seen_global'); app.resetPractice()">
+                                <i data-lucide="refresh-cw"></i>Start Over Unseen
+                            </button>
+                        </div>
+                    `);
                     return;
                 }
 
-                this.displayQuestion(freshUnseen[0]);
+                this.score.pool = freshUnseen.sort(() => Math.random() - 0.5);
+                this.displayQuestion(this.score.pool[0]);
             } catch (e) {
                 this.setHTML(area, '<div class="card" style="border-color:red"><p>Error: ' + e.message + '</p></div>');
             }
@@ -305,170 +336,175 @@ const app = {
         }
     },
 
-    displayQuestion(q) {
-        const area = document.getElementById('question-area');
-        this.score.seen.push(q.id);
+displayQuestion(q) {
+    const area = document.getElementById('question-area');
+    this.score.seen.push(q.id);
+    this.score.globalSeen.push(q.id);
 
-        const opts = [
-            { key: 'A', text: q.option_a },
-            { key: 'B', text: q.option_b },
-            { key: 'C', text: q.option_c },
-            { key: 'D', text: q.option_d }
-        ];
+    // Persist to session storage
+    sessionStorage.setItem('ddcet_seen_global', JSON.stringify(this.score.globalSeen));
 
-        let html = '<div class="card">' +
-            '<h3 style="margin-bottom:0.5rem">' + q.question + '</h3>' +
-            '<div class="q-meta"><span>' + q.subject + '</span><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
-            '<div id="options" style="margin-top:1.5rem">';
+    const opts = [
+        { key: 'A', text: q.option_a },
+        { key: 'B', text: q.option_b },
+        { key: 'C', text: q.option_c },
+        { key: 'D', text: q.option_d }
+    ];
 
-        opts.forEach(o => {
-            html += '<button class="mcq-option" data-key="' + o.key + '" data-correct="' + q.correct_answer + '" onclick="app.selectAnswer(this)">' +
-                '<strong>' + o.key + '.</strong> ' + o.text +
-                '</button>';
-        });
+    let html = '<div class="card">' +
+        '<h3 style="margin-bottom:0.5rem">' + q.question + '</h3>' +
+        '<div class="q-meta"><span>' + q.subject + '</span><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
+        '<div id="options" style="margin-top:1.5rem">';
 
-        html += '</div>' +
-            '<div id="feedback" class="hidden mt"></div>' +
-            '<button id="next-btn" class="btn mt hidden" onclick="app.loadQuestion()">Next Question →</button>' +
-            '</div>';
+    opts.forEach(o => {
+        html += '<button class="mcq-option" data-key="' + o.key + '" data-correct="' + q.correct_answer + '" onclick="app.selectAnswer(this)">' +
+            '<strong>' + o.key + '.</strong> ' + o.text +
+            '</button>';
+    });
 
-        this.setHTML(area, html);
-    },
+    html += '</div>' +
+        '<div id="feedback" class="hidden mt"></div>' +
+        '<button id="next-btn" class="btn mt hidden" onclick="app.loadQuestion()">Next Question →</button>' +
+        '</div>';
 
-    selectAnswer(btn) {
-        var correct = btn.getAttribute('data-correct');
-        var selected = btn.getAttribute('data-key');
-        var allBtns = document.querySelectorAll('#options .mcq-option');
-        var feedback = document.getElementById('feedback');
-        var nextBtn = document.getElementById('next-btn');
+    this.setHTML(area, html);
+},
 
-        allBtns.forEach(function (b) {
-            b.classList.add('disabled');
-            if (b.getAttribute('data-key') === correct) {
-                b.classList.add('correct-highlight');
+selectAnswer(btn) {
+    var correct = btn.getAttribute('data-correct');
+    var selected = btn.getAttribute('data-key');
+    var allBtns = document.querySelectorAll('#options .mcq-option');
+    var feedback = document.getElementById('feedback');
+    var nextBtn = document.getElementById('next-btn');
+
+    allBtns.forEach(function (b) {
+        b.classList.add('disabled');
+        if (b.getAttribute('data-key') === correct) {
+            b.classList.add('correct-highlight');
+        }
+    });
+
+    this.score.total++;
+    if (selected === correct) this.score.correct++;
+
+    this.setHTML(feedback, (selected === correct) ?
+        '<span style="color:var(--success);font-weight:700">✓ Correct! Great job!</span>' :
+        '<span style="color:var(--danger);font-weight:700">✗ Not quite. The correct answer is ' + correct + '.</span>'
+    );
+
+    feedback.classList.remove('hidden');
+    nextBtn.classList.remove('hidden');
+    document.querySelector('#score-display .score').textContent = this.score.correct + ' / ' + this.score.total;
+},
+
+renderBrowse() {
+    this.content.innerHTML =
+        '<h2 class="mt">Question Library</h2>' +
+        '<p style="color:var(--text-muted)">Grouped by date and topic. Use filters to narrow down.</p>' +
+        '<div class="filter-bar mt">' +
+        '<select id="bf-subject" onchange="app.browsePage(1)">' +
+        '<option value="">All Subjects</option>' +
+        '<option value="Maths">Maths</option>' +
+        '<option value="Physics">Physics</option>' +
+        '</select>' +
+        '<select id="bf-difficulty" onchange="app.browsePage(1)">' +
+        '<option value="">All Difficulty</option>' +
+        '<option value="Easy">Easy</option>' +
+        '<option value="Medium">Medium</option>' +
+        '<option value="Hard">Hard</option>' +
+        '</select>' +
+        '</div>' +
+        '<div id="browse-list"><div class="loader"></div></div>' +
+        '<div id="browse-pagination" class="pagination"></div>';
+    this.browsePage(1);
+},
+
+toggleAnswer(btn) {
+    const ans = btn.nextElementSibling;
+    ans.classList.toggle('hidden');
+    btn.textContent = ans.classList.contains('hidden') ? 'Show Answer' : 'Hide Answer';
+},
+
+browsePage(page) {
+    var list = document.getElementById('browse-list');
+    var pagDiv = document.getElementById('browse-pagination');
+    if (!list) return;
+    list.innerHTML = '<div class="loader"></div>';
+
+    var subj = document.getElementById('bf-subject').value;
+    var diff = document.getElementById('bf-difficulty').value;
+    const limit = 15;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let path = `/mcqs?select=*&order=created_at.desc`;
+    if (subj) path += `&subject=eq.${subj}`;
+    if (diff) path += `&difficulty=eq.${diff}`;
+
+    this.safeFetch(path, { headers: { 'Range': `${from}-${to}` } })
+        .then(({ data }) => {
+            if (!data || data.length === 0) {
+                this.setHTML(list, '<div class="card"><p>No questions found for these filters.</p></div>');
+                pagDiv.innerHTML = '';
+                return;
             }
-        });
 
-        this.score.total++;
-        if (selected === correct) this.score.correct++;
+            var groups = {};
+            data.forEach(function (q) {
+                var dateStr = new Date(q.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                if (!groups[dateStr]) groups[dateStr] = {};
+                if (!groups[dateStr][q.subject]) groups[dateStr][q.subject] = [];
+                groups[dateStr][q.subject].push(q);
+            });
 
-        this.setHTML(feedback, (selected === correct) ?
-            '<span style="color:var(--success);font-weight:700">✓ Correct! Great job!</span>' :
-            '<span style="color:var(--danger);font-weight:700">✗ Not quite. The correct answer is ' + correct + '.</span>'
-        );
-
-        feedback.classList.remove('hidden');
-        nextBtn.classList.remove('hidden');
-        document.querySelector('#score-display .score').textContent = this.score.correct + ' / ' + this.score.total;
-    },
-
-    renderBrowse() {
-        this.content.innerHTML =
-            '<h2 class="mt">Question Library</h2>' +
-            '<p style="color:var(--text-muted)">Grouped by date and topic. Use filters to narrow down.</p>' +
-            '<div class="filter-bar mt">' +
-            '<select id="bf-subject" onchange="app.browsePage(1)">' +
-            '<option value="">All Subjects</option>' +
-            '<option value="Maths">Maths</option>' +
-            '<option value="Physics">Physics</option>' +
-            '</select>' +
-            '<select id="bf-difficulty" onchange="app.browsePage(1)">' +
-            '<option value="">All Difficulty</option>' +
-            '<option value="Easy">Easy</option>' +
-            '<option value="Medium">Medium</option>' +
-            '<option value="Hard">Hard</option>' +
-            '</select>' +
-            '</div>' +
-            '<div id="browse-list"><div class="loader"></div></div>' +
-            '<div id="browse-pagination" class="pagination"></div>';
-        this.browsePage(1);
-    },
-
-    toggleAnswer(btn) {
-        const ans = btn.nextElementSibling;
-        ans.classList.toggle('hidden');
-        btn.textContent = ans.classList.contains('hidden') ? 'Show Answer' : 'Hide Answer';
-    },
-
-    browsePage(page) {
-        var list = document.getElementById('browse-list');
-        var pagDiv = document.getElementById('browse-pagination');
-        if (!list) return;
-        list.innerHTML = '<div class="loader"></div>';
-
-        var subj = document.getElementById('bf-subject').value;
-        var diff = document.getElementById('bf-difficulty').value;
-        const limit = 15;
-        const from = (page - 1) * limit;
-        const to = from + limit - 1;
-
-        let path = `/mcqs?select=*&order=created_at.desc`;
-        if (subj) path += `&subject=eq.${subj}`;
-        if (diff) path += `&difficulty=eq.${diff}`;
-
-        this.safeFetch(path, { headers: { 'Range': `${from}-${to}` } })
-            .then(({ data }) => {
-                if (!data || data.length === 0) {
-                    this.setHTML(list, '<div class="card"><p>No questions found for these filters.</p></div>');
-                    pagDiv.innerHTML = '';
-                    return;
-                }
-
-                var groups = {};
-                data.forEach(function (q) {
-                    var dateStr = new Date(q.created_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    if (!groups[dateStr]) groups[dateStr] = {};
-                    if (!groups[dateStr][q.subject]) groups[dateStr][q.subject] = [];
-                    groups[dateStr][q.subject].push(q);
-                });
-
-                var html = '';
-                Object.keys(groups).forEach(function (day) {
-                    html += '<div class="group-header"><span>Uploaded on</span><h2>' + day + '</h2></div>';
-                    Object.keys(groups[day]).forEach(function (subject) {
-                        html += '<div style="margin-top:1rem;font-size:0.8rem;color:var(--primary);font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:0 0.5rem">' + subject + '</div>';
-                        groups[day][subject].forEach(function (q, idx) {
-                            html += '<div class="card">' +
-                                '<div><strong>' + (idx + 1) + '.</strong> ' + q.question + '</div>' +
-                                '<div class="q-meta"><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
-                                '<div style="margin-top:0.75rem;font-size:0.9rem;color:var(--text-muted)">' +
-                                'A: ' + q.option_a + ' &nbsp;|&nbsp; B: ' + q.option_b + ' &nbsp;|&nbsp; C: ' + q.option_c + ' &nbsp;|&nbsp; D: ' + q.option_d +
-                                '</div>' +
-                                '<button class="expand-btn" onclick="app.toggleAnswer(this)">Show Answer</button>' +
-                                '<div class="browse-answer hidden">Correct Answer: <strong>' + q.correct_answer + '</strong></div>' +
-                                '</div>';
-                        });
+            var html = '';
+            Object.keys(groups).forEach(function (day) {
+                html += '<div class="group-header"><span>Uploaded on</span><h2>' + day + '</h2></div>';
+                Object.keys(groups[day]).forEach(function (subject) {
+                    html += '<div style="margin-top:1rem;font-size:0.8rem;color:var(--primary);font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:0 0.5rem">' + subject + '</div>';
+                    groups[day][subject].forEach(function (q, idx) {
+                        html += '<div class="card">' +
+                            '<div><strong>' + (idx + 1) + '.</strong> ' + q.question + '</div>' +
+                            '<div class="q-meta"><span>' + q.difficulty + '</span><span>' + q.topic + '</span></div>' +
+                            '<div style="margin-top:0.75rem;font-size:0.9rem;color:var(--text-muted)">' +
+                            'A: ' + q.option_a + ' &nbsp;|&nbsp; B: ' + q.option_b + ' &nbsp;|&nbsp; C: ' + q.option_c + ' &nbsp;|&nbsp; D: ' + q.option_d +
+                            '</div>' +
+                            '<button class="expand-btn" onclick="app.toggleAnswer(this)">Show Answer</button>' +
+                            '<div class="browse-answer hidden">Correct Answer: <strong>' + q.correct_answer + '</strong></div>' +
+                            '</div>';
                     });
                 });
-                this.setHTML(list, html);
-
-                // For simplicity, we assume there are more pages if we hit the limit
-                var pagHtml = '';
-                if (page > 1) pagHtml += '<button class="btn btn-sm btn-outline" onclick="app.browsePage(' + (page - 1) + ')">Previous</button>';
-                if (data.length === limit) pagHtml += '<button class="btn btn-sm btn-outline" onclick="app.browsePage(' + (page + 1) + ')">Next</button>';
-
-                this.setHTML(pagDiv, pagHtml);
-            })
-            .catch(e => {
-                this.setHTML(list, '<div class="card" style="border-color:red"><p>Error: ' + e.message + '</p></div>');
             });
-    },
+            this.setHTML(list, html);
 
-    triggerGen() {
-        alert('Remote generation is disabled. Please use "npm run generate" locally instead.');
-    },
+            // For simplicity, we assume there are more pages if we hit the limit
+            var pagHtml = '';
+            if (page > 1) pagHtml += '<button class="btn btn-sm btn-outline" onclick="app.browsePage(' + (page - 1) + ')">Previous</button>';
+            if (data.length === limit) pagHtml += '<button class="btn btn-sm btn-outline" onclick="app.browsePage(' + (page + 1) + ')">Next</button>';
+
+            this.setHTML(pagDiv, pagHtml);
+        })
+        .catch(e => {
+            this.setHTML(list, '<div class="card" style="border-color:red"><p>Error: ' + e.message + '</p></div>');
+        });
+},
+
+triggerGen() {
+    alert('Remote generation is disabled. Please use "npm run generate" locally instead.');
+},
 
     // --- AUTH ---
     async hashPassword(password) {
-        const msgUint8 = new TextEncoder().encode(password);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    },
+    const msgUint8 = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+},
 
-    renderLogin() {
-        this.setHTML(this.content, `
-            <div class="card mt" style="max-width:400px;margin:4rem auto;animation:slideUp 0.6s ease">
+renderLogin() {
+    this.setHTML(this.content, `
+            <div class="card mt" style="max-width:400px;margin:2rem auto;animation:slideUp 0.6s ease">
+                <lottie-player src="https://assets3.lottiefiles.com/packages/lf20_u8o7ocHB.json" background="transparent" speed="1" style="width: 150px; height: 150px;" loop autoplay></lottie-player>
                 <h2 style="text-align:center;margin-bottom:0.5rem">Welcome Back</h2>
                 <p style="text-align:center;color:var(--text-muted);margin-bottom:2rem">Sign in to access your MCQ platform.</p>
                 <form onsubmit="event.preventDefault(); app.handleLogin()">
@@ -488,66 +524,66 @@ const app = {
                 </div>
             </div>
         `);
-    },
+},
 
     async handleLogin() {
-        const username = document.getElementById('login-username').value;
-        const password = document.getElementById('login-password').value;
-        const errorEl = document.getElementById('login-error');
-        
-        errorEl.classList.add('hidden');
-        
-        try {
-            const hash = await this.hashPassword(password);
-            const { data } = await this.safeFetch(`/users?username=eq.${username}&select=*`);
-            
-            if (data && data.length > 0 && data[0].password_hash === hash) {
-                this.user = { id: data[0].id, username: data[0].username };
-                sessionStorage.setItem('ddcet_user', JSON.stringify(this.user));
-                this.updateNav();
-                history.pushState(null, '', '/dashboard');
-                this.renderDashboard();
-            } else {
-                throw new Error("Invalid username or password");
-            }
-        } catch (e) {
-            errorEl.textContent = e.message;
-            errorEl.classList.remove('hidden');
-        }
-    },
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    const errorEl = document.getElementById('login-error');
 
-    logout() {
-        this.user = null;
-        sessionStorage.removeItem('ddcet_user');
-        this.updateNav();
-        history.pushState(null, '', '/login');
-        this.renderLogin();
-    },
+    errorEl.classList.add('hidden');
+
+    try {
+        const hash = await this.hashPassword(password);
+        const { data } = await this.safeFetch(`/users?username=eq.${username}&select=*`);
+
+        if (data && data.length > 0 && data[0].password_hash === hash) {
+            this.user = { id: data[0].id, username: data[0].username };
+            sessionStorage.setItem('ddcet_user', JSON.stringify(this.user));
+            this.updateNav();
+            history.pushState(null, '', '/dashboard');
+            this.renderDashboard();
+        } else {
+            throw new Error("Invalid username or password");
+        }
+    } catch (e) {
+        errorEl.textContent = e.message;
+        errorEl.classList.remove('hidden');
+    }
+},
+
+logout() {
+    this.user = null;
+    sessionStorage.removeItem('ddcet_user');
+    this.updateNav();
+    history.pushState(null, '', '/login');
+    this.renderLogin();
+},
 
     async renderDashboard() {
-        this.setHTML(this.content, '<div class="loader"></div>');
-        try {
-            const { data: historyData } = await this.safeFetch(`/user_exam_history?user_id=eq.${this.user.id}&order=created_at.desc`);
-            
-            let stats = {
-                totalExams: historyData.length,
-                bestScore: 0,
-                avgScore: 0,
-                totalTime: 0
-            };
+    this.setHTML(this.content, '<div class="loader"></div>');
+    try {
+        const { data: historyData } = await this.safeFetch(`/user_exam_history?user_id=eq.${this.user.id}&order=created_at.desc`);
 
-            if (historyData.length > 0) {
-                const totalPct = historyData.reduce((acc, curr) => acc + (curr.score / curr.total_questions), 0);
-                stats.avgScore = Math.round((totalPct / historyData.length) * 100);
-                stats.bestScore = Math.round(Math.max(...historyData.map(h => h.score / h.total_questions)) * 100);
-                stats.totalTime = Math.round(historyData.reduce((acc, curr) => acc + curr.time_taken_seconds, 0) / 60);
-            }
+        let stats = {
+            totalExams: historyData.length,
+            bestScore: 0,
+            avgScore: 0,
+            totalTime: 0
+        };
 
-            const historyRows = historyData.map(h => `
+        if (historyData.length > 0) {
+            const totalPct = historyData.reduce((acc, curr) => acc + (curr.score / curr.total_questions), 0);
+            stats.avgScore = Math.round((totalPct / historyData.length) * 100);
+            stats.bestScore = Math.round(Math.max(...historyData.map(h => h.score / h.total_questions)) * 100);
+            stats.totalTime = Math.round(historyData.reduce((acc, curr) => acc + curr.time_taken_seconds, 0) / 60);
+        }
+
+        const historyRows = historyData.map(h => `
                 <div class="card mt" style="padding:1rem;display:flex;justify-content:space-between;align-items:center">
                     <div>
                         <strong>${new Date(h.created_at).toLocaleDateString()}</strong>
-                        <div class="q-meta"><span>${h.total_questions} Questions</span><span>${Math.round(h.time_taken_seconds/60)}m taken</span></div>
+                        <div class="q-meta"><span>${h.total_questions} Questions</span><span>${Math.round(h.time_taken_seconds / 60)}m taken</span></div>
                     </div>
                     <div style="font-size:1.5rem;font-weight:800;color:var(--primary)">
                         ${Math.round((h.score / h.total_questions) * 100)}%
@@ -555,119 +591,124 @@ const app = {
                 </div>
             `).join('');
 
-            this.setHTML(this.content, `
+        this.setHTML(this.content, `
                 <div class="hero">
+                    <lottie-player src="https://assets2.lottiefiles.com/packages/lf20_qpwb7taz.json" background="transparent" speed="1" style="width: 150px; height: 150px;" loop autoplay></lottie-player>
                     <h1>Welcome, ${this.user.username}!</h1>
                     <p>Your Exam Performance Overview</p>
                 </div>
                 
                 <div class="grid mt">
-                    <div class="card" style="text-align:center">
+                    <div class="card stat-card">
+                        <i data-lucide="award" style="color:var(--primary)"></i>
                         <div class="stat-label">Exams Taken</div>
                         <div class="stat-val">${stats.totalExams}</div>
                     </div>
-                    <div class="card" style="text-align:center">
+                    <div class="card stat-card">
+                        <i data-lucide="trending-up" style="color:var(--primary)"></i>
                         <div class="stat-label">Best Score</div>
                         <div class="stat-val">${stats.bestScore}%</div>
                     </div>
-                    <div class="card" style="text-align:center">
+                    <div class="card stat-card">
+                        <i data-lucide="bar-chart-2" style="color:var(--primary)"></i>
                         <div class="stat-label">Average Score</div>
                         <div class="stat-val">${stats.avgScore}%</div>
                     </div>
-                    <div class="card" style="text-align:center">
+                    <div class="card stat-card">
+                        <i data-lucide="hourglass" style="color:var(--primary)"></i>
                         <div class="stat-label">Total Minutes</div>
                         <div class="stat-val">${stats.totalTime}</div>
                     </div>
                 </div>
 
-                <h3 class="mt" style="margin-top:3rem">Recent Attempts</h3>
+                <h3 class="mt" style="margin-top:3rem"><i data-lucide="history" style="vertical-align:middle;margin-right:0.5rem"></i>Recent Attempts</h3>
                 ${historyData.length > 0 ? historyRows : '<p class="mt" style="text-align:center;color:var(--text-muted)">No exams taken yet. Ready to start?</p>'}
                 <div class="mt" style="text-align:center;padding-bottom:4rem">
-                    <a href="/exam" class="btn mt">Start New Exam</a>
+                    <a href="/exam" class="btn mt"><i data-lucide="plus"></i>Start New Exam</a>
                 </div>
             `);
-        } catch (e) {
-            console.error("Dashboard error:", e);
-            this.setHTML(this.content, `<div class="card" style="border-color:var(--danger)"><h3>Dashboard Error</h3><p class="mt">${e.message}</p></div>`);
-        }
-    },
+    } catch (e) {
+        console.error("Dashboard error:", e);
+        this.setHTML(this.content, `<div class="card" style="border-color:var(--danger)"><h3>Dashboard Error</h3><p class="mt">${e.message}</p></div>`);
+    }
+},
 
-    // --- EXAM MODE ---
-    exam: {
-        active: false,
+// --- EXAM MODE ---
+exam: {
+    active: false,
         questions: [],
-        currentIndex: 0,
-        answers: {},
-        timeLeft: 0,
+            currentIndex: 0,
+                answers: { },
+    timeLeft: 0,
         timerId: null
-    },
+},
 
-    renderExam() {
-        if (this.exam.active) return this.showExamQuestion();
+renderExam() {
+    if (this.exam.active) return this.showExamQuestion();
 
-        this.setHTML(this.content,
-            '<h2 class="mt">Exam Mode</h2>' +
-            '<p style="color:var(--text-muted)">20 random questions. No instant feedback. 30 minutes timer.</p>' +
-            '<div class="card mt">' +
-            '<h3>Ready to start?</h3>' +
-            '<div class="filter-bar mt">' +
-            '<select id="ef-subject">' +
-            '<option value="">All Subjects</option>' +
-            '<option value="Maths">Maths</option>' +
-            '<option value="Physics">Physics</option>' +
-            '</select>' +
-            '</div>' +
-            '<button class="btn mt" onclick="app.startExam()">Start 30-Minute Exam</button>' +
-            '</div>'
-        );
-    },
+    this.setHTML(this.content,
+        '<h2 class="mt">Exam Mode</h2>' +
+        '<p style="color:var(--text-muted)">20 random questions. No instant feedback. 30 minutes timer.</p>' +
+        '<div class="card mt">' +
+        '<h3>Ready to start?</h3>' +
+        '<div class="filter-bar mt">' +
+        '<select id="ef-subject">' +
+        '<option value="">All Subjects</option>' +
+        '<option value="Maths">Maths</option>' +
+        '<option value="Physics">Physics</option>' +
+        '</select>' +
+        '</div>' +
+        '<button class="btn mt" onclick="app.startExam()">Start 30-Minute Exam</button>' +
+        '</div>'
+    );
+},
 
     async startExam() {
-        const subj = document.getElementById('ef-subject').value;
-        this.setHTML(this.content, '<div class="loader"></div>');
+    const subj = document.getElementById('ef-subject').value;
+    this.setHTML(this.content, '<div class="loader"></div>');
 
-        let path = '/mcqs?select=*&limit=100';
-        if (subj) path += `&subject=eq.${subj}`;
+    let path = '/mcqs?select=*&limit=100';
+    if (subj) path += `&subject=eq.${subj}`;
 
-        try {
-            const { data } = await this.safeFetch(path);
-            if (!data || data.length === 0) throw new Error("No questions found");
+    try {
+        const { data } = await this.safeFetch(path);
+        if (!data || data.length === 0) throw new Error("No questions found");
 
-            const shuffled = data.sort(() => Math.random() - 0.5);
-            const selected = shuffled.slice(0, 20);
+        const shuffled = data.sort(() => Math.random() - 0.5);
+        const selected = shuffled.slice(0, 20);
 
-            this.exam = {
-                active: true,
-                questions: selected,
-                currentIndex: 0,
-                answers: {},
-                timeLeft: 1800, // 30 mins
-                timerId: setInterval(() => this.tickExam(), 1000)
-            };
-            this.showExamQuestion();
-        } catch (e) {
-            alert(e.message);
-            this.renderExam();
-        }
-    },
+        this.exam = {
+            active: true,
+            questions: selected,
+            currentIndex: 0,
+            answers: {},
+            timeLeft: 1800, // 30 mins
+            timerId: setInterval(() => this.tickExam(), 1000)
+        };
+        this.showExamQuestion();
+    } catch (e) {
+        alert(e.message);
+        this.renderExam();
+    }
+},
 
-    tickExam() {
-        this.exam.timeLeft--;
-        const timerEl = document.getElementById('exam-timer-val');
-        if (timerEl) {
-            const m = Math.floor(this.exam.timeLeft / 60);
-            const s = this.exam.timeLeft % 60;
-            timerEl.textContent = m + ':' + s.toString().padStart(2, '0');
-        }
-        if (this.exam.timeLeft <= 0) this.finishExam();
-    },
-
-    showExamQuestion() {
-        const q = this.exam.questions[this.exam.currentIndex];
+tickExam() {
+    this.exam.timeLeft--;
+    const timerEl = document.getElementById('exam-timer-val');
+    if (timerEl) {
         const m = Math.floor(this.exam.timeLeft / 60);
         const s = this.exam.timeLeft % 60;
+        timerEl.textContent = m + ':' + s.toString().padStart(2, '0');
+    }
+    if (this.exam.timeLeft <= 0) this.finishExam();
+},
 
-        let html = `
+showExamQuestion() {
+    const q = this.exam.questions[this.exam.currentIndex];
+    const m = Math.floor(this.exam.timeLeft / 60);
+    const s = this.exam.timeLeft % 60;
+
+    let html = `
             <div style="display:flex;justify-content:space-between;align-items:center" class="mt">
                 <h2>Question ${this.exam.currentIndex + 1} / ${this.exam.questions.length}</h2>
                 <div class="exam-timer">Time Left: <span id="exam-timer-val">${m}:${s.toString().padStart(2, '0')}</span></div>
@@ -678,56 +719,56 @@ const app = {
                 <div id="options" style="margin-top:1.5rem">
         `;
 
-        ['A', 'B', 'C', 'D'].forEach(key => {
-            const text = q['option_' + key.toLowerCase()];
-            const selected = this.exam.answers[this.exam.currentIndex] === key;
-            html += `
+    ['A', 'B', 'C', 'D'].forEach(key => {
+        const text = q['option_' + key.toLowerCase()];
+        const selected = this.exam.answers[this.exam.currentIndex] === key;
+        html += `
                 <button class="mcq-option ${selected ? 'correct-highlight' : ''}" onclick="app.saveExamAnswer('${key}')">
                     <strong>${key}.</strong> ${text}
                 </button>
             `;
-        });
+    });
 
-        html += `
+    html += `
                 </div>
                 <div style="display:flex;justify-content:space-between" class="mt">
                     <button class="btn btn-outline" ${this.exam.currentIndex === 0 ? 'disabled' : ''} onclick="app.moveExam(-1)">Previous</button>
                     ${this.exam.currentIndex === this.exam.questions.length - 1 ?
-                `<button class="btn" style="background:var(--success)" onclick="app.finishExam()">Submit & Finish</button>` :
-                `<button class="btn" onclick="app.moveExam(1)">Next Question</button>`}
+            `<button class="btn" style="background:var(--success)" onclick="app.finishExam()">Submit & Finish</button>` :
+            `<button class="btn" onclick="app.moveExam(1)">Next Question</button>`}
                 </div>
             </div>
         `;
 
-        this.setHTML(this.content, html);
-    },
+    this.setHTML(this.content, html);
+},
 
-    saveExamAnswer(key) {
-        this.exam.answers[this.exam.currentIndex] = key;
-        const btns = document.querySelectorAll('#options .mcq-option');
-        btns.forEach((btn, idx) => {
-            btn.classList.toggle('correct-highlight', ['A', 'B', 'C', 'D'][idx] === key);
-        });
-    },
+saveExamAnswer(key) {
+    this.exam.answers[this.exam.currentIndex] = key;
+    const btns = document.querySelectorAll('#options .mcq-option');
+    btns.forEach((btn, idx) => {
+        btn.classList.toggle('correct-highlight', ['A', 'B', 'C', 'D'][idx] === key);
+    });
+},
 
-    moveExam(dir) {
-        this.exam.currentIndex += dir;
-        this.showExamQuestion();
-    },
+moveExam(dir) {
+    this.exam.currentIndex += dir;
+    this.showExamQuestion();
+},
 
-    finishExam() {
-        if (!confirm('Are you sure you want to finish and submit?')) return;
-        if (this.exam.timerId) clearInterval(this.exam.timerId);
+finishExam() {
+    if (!confirm('Are you sure you want to finish and submit?')) return;
+    if (this.exam.timerId) clearInterval(this.exam.timerId);
 
-        let correctCount = 0;
-        let resultHtml = '';
+    let correctCount = 0;
+    let resultHtml = '';
 
-        this.exam.questions.forEach((q, i) => {
-            const userAns = this.exam.answers[i];
-            const isCorrect = userAns === q.correct_answer;
-            if (isCorrect) correctCount++;
+    this.exam.questions.forEach((q, i) => {
+        const userAns = this.exam.answers[i];
+        const isCorrect = userAns === q.correct_answer;
+        if (isCorrect) correctCount++;
 
-            resultHtml += `
+        resultHtml += `
                 <div class="card mt" style="border-left: 4px solid ${isCorrect ? 'var(--success)' : 'var(--danger)'}">
                     <p><strong>${i + 1}. ${q.question}</strong></p>
                     <div class="mt" style="font-size:0.9rem">
@@ -738,27 +779,27 @@ const app = {
                     </div>
                 </div>
             `;
-        });
+    });
 
-        const score = Math.round((correctCount / this.exam.questions.length) * 100);
+    const score = Math.round((correctCount / this.exam.questions.length) * 100);
 
-        // Save history if logged in
-        if (this.user) {
-            this.safeFetch('/user_exam_history', {
-                method: 'POST',
-                body: JSON.stringify({
-                    user_id: this.user.id,
-                    score: correctCount,
-                    total_questions: this.exam.questions.length,
-                    time_taken_seconds: 1800 - this.exam.timeLeft,
-                    attempted_question_ids: this.exam.questions.map(q => q.id)
-                }),
-                headers: { 'Prefer': 'return=minimal' }
-            }).catch(e => console.error("Failed to save history:", e));
-        }
+    // Save history if logged in
+    if (this.user) {
+        this.safeFetch('/user_exam_history', {
+            method: 'POST',
+            body: JSON.stringify({
+                user_id: this.user.id,
+                score: correctCount,
+                total_questions: this.exam.questions.length,
+                time_taken_seconds: 1800 - this.exam.timeLeft,
+                attempted_question_ids: this.exam.questions.map(q => q.id)
+            }),
+            headers: { 'Prefer': 'return=minimal' }
+        }).catch(e => console.error("Failed to save history:", e));
+    }
 
-        this.setHTML(this.content,
-            `<div class="hero">
+    this.setHTML(this.content,
+        `<div class="hero">
                 <h1>Exam Results</h1>
                 <div class="stat-val" style="font-size:4rem">${score}%</div>
                 <p>${correctCount} / ${this.exam.questions.length} Correct</p>
@@ -771,9 +812,9 @@ const app = {
             <div class="mt" style="padding-bottom:4rem">
                  <a href="/exam" class="btn" onclick="app.exam.active=false">Return to Exam Home</a>
             </div>`
-        );
-        this.exam.active = false;
-    }
+    );
+    this.exam.active = false;
+}
 };
 
 app.init();
