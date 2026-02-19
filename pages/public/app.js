@@ -38,8 +38,6 @@ const app = {
                 this.route();
             }
         });
-            }
-        });
         this.updateNav();
         this.route();
     },
