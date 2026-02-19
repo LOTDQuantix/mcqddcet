@@ -11,7 +11,19 @@ const app = {
     supabaseUrl: window.SUPABASE_URL || 'https://ngisjclqxzvfdnphrnif.supabase.co',
     supabaseKey: window.SUPABASE_ANON_KEY || '',
 
-    init() {
+    user: null, // Current logged in user
+
+    async init() {
+        // Load session
+        const savedUser = localStorage.getItem('ddcet_user');
+        if (savedUser) {
+            try {
+                this.user = JSON.parse(savedUser);
+            } catch (e) {
+                localStorage.removeItem('ddcet_user');
+            }
+        }
+
         if (!this.supabaseKey || this.supabaseKey === 'your-anon-key-here') {
             const msg = '⚠️ Supabase Anon Key is missing. Please set it in index.html or as an environment variable.';
             console.error(msg);
@@ -26,6 +38,9 @@ const app = {
                 this.route();
             }
         });
+            }
+        });
+        this.updateNav();
         this.route();
     },
 
@@ -100,17 +115,42 @@ const app = {
 
     route() {
         const path = window.location.pathname;
-        document.querySelectorAll('.nav-links a').forEach(a => {
-            a.classList.toggle('active', a.getAttribute('href') === path);
-        });
+        this.updateNav();
+
+        // Protected Routes
+        const protectedRoutes = ['/practice', '/exam', '/dashboard'];
+        if (protectedRoutes.includes(path) && !this.user) {
+            history.pushState(null, '', '/login');
+            return this.renderLogin();
+        }
 
         if (path === '/') this.renderHome();
         else if (path === '/practice') this.renderPractice();
         else if (path === '/exam') this.renderExam();
         else if (path === '/browse') this.renderBrowse();
-        else if (path === '/admin') this.renderAdmin();
+        else if (path === '/login') this.renderLogin();
+        else if (path === '/dashboard') this.renderDashboard();
         else if (path.startsWith('/batch/')) this.renderBatchDetails(path.split('/').pop());
         else this.setHTML(this.content, '<div style="text-align:center;padding:4rem"><h1 style="font-size:4rem">404</h1><p>Page not found</p><a href="/" class="btn mt">Home</a></div>');
+    },
+
+    updateNav() {
+        document.querySelectorAll('.nav-links a').forEach(a => {
+            const href = a.getAttribute('href');
+            a.classList.toggle('active', href === window.location.pathname);
+        });
+
+        const authLinks = document.getElementById('auth-links');
+        if (authLinks) {
+            if (this.user) {
+                authLinks.innerHTML = `
+                    <a href="/dashboard">Dashboard</a>
+                    <a href="#" onclick="event.preventDefault(); app.logout()">Logout</a>
+                `;
+            } else {
+                authLinks.innerHTML = `<a href="/login">Login</a>`;
+            }
+        }
     },
 
     renderHome() {
@@ -412,79 +452,142 @@ const app = {
             });
     },
 
-    async renderAdmin() {
-        this.setHTML(this.content, '<div class="loader"></div>');
+    triggerGen() {
+        alert('Remote generation is disabled. Please use "npm run generate" locally instead.');
+    },
 
-        const getCount = (res) => {
-            const range = res.headers.get('content-range');
-            return range ? range.split('/').pop() : 0;
-        };
+    // --- AUTH ---
+    async hashPassword(password) {
+        const msgUint8 = new TextEncoder().encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    },
 
+    renderLogin() {
+        this.setHTML(this.content, `
+            <div class="card mt" style="max-width:400px;margin:4rem auto">
+                <h2 style="text-align:center">Login</h2>
+                <p style="text-align:center;color:var(--text-muted);margin-bottom:2rem">Enter your credentials to track your progress.</p>
+                <form onsubmit="event.preventDefault(); app.handleLogin()">
+                    <div class="mt">
+                        <label style="display:block;margin-bottom:0.5rem">Username</label>
+                        <input type="text" id="login-username" class="btn btn-outline" style="width:100%;text-align:left;background:var(--card-bg)" required>
+                    </div>
+                    <div class="mt">
+                        <label style="display:block;margin-bottom:0.5rem">Password</label>
+                        <input type="password" id="login-password" class="btn btn-outline" style="width:100%;text-align:left;background:var(--card-bg)" required>
+                    </div>
+                    <button type="submit" class="btn mt" style="width:100%">Sign In</button>
+                    <p id="login-error" class="mt hidden" style="color:var(--danger);text-align:center;font-size:0.9rem"></p>
+                </form>
+                <div class="mt" style="text-align:center;font-size:0.8rem;color:var(--text-muted)">
+                    Don't have an account? Ask admin to create one via SQL.
+                </div>
+            </div>
+        `);
+    },
+
+    async handleLogin() {
+        const username = document.getElementById('login-username').value;
+        const password = document.getElementById('login-password').value;
+        const errorEl = document.getElementById('login-error');
+        
+        errorEl.classList.add('hidden');
+        
         try {
-            const [totalRes, batchesRes, latestBatchesRes] = await Promise.all([
-                this.safeFetch('/mcqs?select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' }),
-                this.safeFetch('/batches?select=id', { headers: { 'Prefer': 'count=exact' }, method: 'HEAD' }),
-                this.safeFetch('/batches?select=*&order=created_at.desc&limit=5')
-            ]);
+            const hash = await this.hashPassword(password);
+            const { data } = await this.safeFetch(`/users?username=eq.${username}&select=*`);
+            
+            if (data && data.length > 0 && data[0].password_hash === hash) {
+                this.user = { id: data[0].id, username: data[0].username };
+                localStorage.setItem('ddcet_user', JSON.stringify(this.user));
+                this.updateNav();
+                history.pushState(null, '', '/dashboard');
+                this.renderDashboard();
+            } else {
+                throw new Error("Invalid username or password");
+            }
+        } catch (e) {
+            errorEl.textContent = e.message;
+            errorEl.classList.remove('hidden');
+        }
+    },
 
-            const stats = {
-                totalMCQs: getCount(totalRes),
-                totalBatches: getCount(batchesRes),
-                recentBatches: latestBatchesRes.data
+    logout() {
+        this.user = null;
+        localStorage.removeItem('ddcet_user');
+        this.updateNav();
+        history.pushState(null, '', '/');
+        this.renderHome();
+    },
+
+    async renderDashboard() {
+        this.setHTML(this.content, '<div class="loader"></div>');
+        try {
+            const { data: historyData } = await this.safeFetch(`/user_exam_history?user_id=eq.${this.user.id}&order=created_at.desc`);
+            
+            let stats = {
+                totalExams: historyData.length,
+                bestScore: 0,
+                avgScore: 0,
+                totalTime: 0
             };
 
-            const lastBatchDate = stats.recentBatches.length > 0
-                ? new Date(stats.recentBatches[0].created_at).toLocaleDateString()
-                : 'N/A';
+            if (historyData.length > 0) {
+                const totalPct = historyData.reduce((acc, curr) => acc + (curr.score / curr.total_questions), 0);
+                stats.avgScore = Math.round((totalPct / historyData.length) * 100);
+                stats.bestScore = Math.round(Math.max(...historyData.map(h => h.score / h.total_questions)) * 100);
+                stats.totalTime = Math.round(historyData.reduce((acc, curr) => acc + curr.time_taken_seconds, 0) / 60);
+            }
 
-            let batchHtml = stats.recentBatches.map(b => `
-                <div class="card mt" style="padding:1rem; border-left: 4px solid var(--primary)">
-                    <div style="display:flex; justify-content:space-between; align-items:center">
-                        <strong>${b.id}</strong>
-                        <span class="q-meta">${new Date(b.created_at).toLocaleDateString()}</span>
+            const historyRows = historyData.map(h => `
+                <div class="card mt" style="padding:1rem;display:flex;justify-content:space-between;align-items:center">
+                    <div>
+                        <strong>${new Date(h.created_at).toLocaleDateString()}</strong>
+                        <div class="q-meta"><span>${h.total_questions} Questions</span><span>${Math.round(h.time_taken_seconds/60)}m taken</span></div>
                     </div>
-                    <div class="mt" style="font-size:0.85rem">
-                        <span>Questions: ${b.total_questions}</span> | 
-                        <span>Status: <span style="color:${b.status === 'completed' ? 'var(--success)' : 'var(--danger)'}">${b.status}</span></span>
+                    <div style="font-size:1.5rem;font-weight:800;color:var(--primary)">
+                        ${Math.round((h.score / h.total_questions) * 100)}%
                     </div>
                 </div>
             `).join('');
 
             this.setHTML(this.content, `
-                <h2 class="mt">Admin Dashboard</h2>
-                <p style="color:var(--text-muted)">Read-only view of platform database status.</p>
+                <div class="hero">
+                    <h1>Welcome, ${this.user.username}!</h1>
+                    <p>Your Exam Performance Overview</p>
+                </div>
                 
                 <div class="grid mt">
                     <div class="card" style="text-align:center">
-                        <div class="stat-label">Total MCQs</div>
-                        <div class="stat-val">${stats.totalMCQs}</div>
+                        <div class="stat-label">Exams Taken</div>
+                        <div class="stat-val">${stats.totalExams}</div>
                     </div>
                     <div class="card" style="text-align:center">
-                        <div class="stat-label">Total Batches</div>
-                        <div class="stat-val">${stats.totalBatches}</div>
+                        <div class="stat-label">Best Score</div>
+                        <div class="stat-val">${stats.bestScore}%</div>
                     </div>
                     <div class="card" style="text-align:center">
-                        <div class="stat-label">Last Batch</div>
-                        <div class="stat-val" style="font-size:1.2rem">${lastBatchDate}</div>
+                        <div class="stat-label">Average Score</div>
+                        <div class="stat-val">${stats.avgScore}%</div>
+                    </div>
+                    <div class="card" style="text-align:center">
+                        <div class="stat-label">Total Minutes</div>
+                        <div class="stat-val">${stats.totalTime}</div>
                     </div>
                 </div>
 
-                <h3 class="mt">Recent Batches</h3>
-                ${stats.recentBatches.length > 0 ? batchHtml : '<p class="mt">No batches found.</p>'}
-                
-                <div class="card mt" style="background:rgba(0,188,212,0.05)">
-                    <h3>Maintenance Note</h3>
-                    <p class="mt" style="font-size:0.9rem">Generation logic has been moved to local scripts for security. Use <code>npm run generate</code> to add new questions.</p>
+                <h3 class="mt" style="margin-top:3rem">Recent Attempts</h3>
+                ${historyData.length > 0 ? historyRows : '<p class="mt" style="text-align:center;color:var(--text-muted)">No exams taken yet. Ready to start?</p>'}
+                <div class="mt" style="text-align:center;padding-bottom:4rem">
+                    <a href="/exam" class="btn mt">Start New Exam</a>
                 </div>
             `);
         } catch (e) {
-            console.error("Admin render error:", e);
-            this.setHTML(this.content, `<div class="card" style="border-color:var(--danger)"><h3>Admin Load Error</h3><p class="mt">${e.message}</p></div>`);
+            console.error("Dashboard error:", e);
+            this.setHTML(this.content, `<div class="card" style="border-color:var(--danger)"><h3>Dashboard Error</h3><p class="mt">${e.message}</p></div>`);
         }
-    },
-
-    triggerGen() {
-        alert('Remote generation is disabled. Please use "npm run generate" locally instead.');
     },
 
     // --- EXAM MODE ---
@@ -636,6 +739,22 @@ const app = {
         });
 
         const score = Math.round((correctCount / this.exam.questions.length) * 100);
+
+        // Save history if logged in
+        if (this.user) {
+            this.safeFetch('/user_exam_history', {
+                method: 'POST',
+                body: JSON.stringify({
+                    user_id: this.user.id,
+                    score: correctCount,
+                    total_questions: this.exam.questions.length,
+                    time_taken_seconds: 1800 - this.exam.timeLeft,
+                    attempted_question_ids: this.exam.questions.map(q => q.id)
+                }),
+                headers: { 'Prefer': 'return=minimal' }
+            }).catch(e => console.error("Failed to save history:", e));
+        }
+
         this.setHTML(this.content,
             `<div class="hero">
                 <h1>Exam Results</h1>

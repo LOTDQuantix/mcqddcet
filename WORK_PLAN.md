@@ -523,3 +523,99 @@ Do not rewrite entire frontend.
 Patch current logic cleanly.
 Preserve KaTeX stability.
 
+Phase 9 — Authentication & Exam Tracking System
+
+We are implementing a lightweight authentication and per-user exam tracking system in the existing Pages → Supabase architecture.
+
+Do NOT reintroduce Worker.
+Do NOT use service_role key.
+Preserve existing MCQ structure and dedup logic.
+
+----------------------------------------
+PART 1 — Remove Admin Page
+----------------------------------------
+
+1. Delete admin route.
+2. Remove all admin-related UI components.
+3. Remove references in navigation.
+
+----------------------------------------
+PART 2 — Custom Login System
+----------------------------------------
+
+Implement a simple authentication system using a custom table:
+
+Table: users
+Fields:
+- id (UUID primary key)
+- username (text, unique)
+- password_hash (text)
+- created_at (timestamp)
+
+Users must be creatable via a single SQL insert query.
+
+Password must be hashed using SHA-256 (frontend before insert).
+
+Do NOT use Supabase Auth service.
+
+----------------------------------------
+PART 3 — Exam History Tracking
+----------------------------------------
+
+Create table: user_exam_history
+
+Fields:
+- id (UUID primary key)
+- user_id (UUID, foreign key)
+- score (integer)
+- total_questions (integer)
+- time_taken_seconds (integer)
+- attempted_question_ids (jsonb)
+- created_at (timestamp)
+
+----------------------------------------
+PART 4 — RLS Policies
+----------------------------------------
+
+1. Enable RLS on users and user_exam_history.
+2. Users can:
+   - SELECT their own exam history.
+   - INSERT their own exam history.
+3. Users cannot access other users’ records.
+4. Anon cannot access exam history.
+
+----------------------------------------
+PART 5 — Frontend Login Flow
+----------------------------------------
+
+1. Create /login page.
+2. Authenticate by:
+   - Fetching user by username
+   - Comparing SHA-256 hash
+3. Store session in localStorage.
+4. Redirect to dashboard on success.
+5. Block Practice/Exam routes if not logged in.
+
+----------------------------------------
+PART 6 — User Dashboard
+----------------------------------------
+
+Create /dashboard page displaying:
+
+- Total exams taken
+- Best score
+- Average score
+- Total time spent
+- List of previous attempts (date, score, time)
+
+----------------------------------------
+OUTPUT REQUIRED
+----------------------------------------
+
+Provide:
+1. SQL schema
+2. RLS policies
+3. Login verification logic
+4. Exam save logic
+5. Dashboard fetch logic
+6. Confirmation admin page removed
