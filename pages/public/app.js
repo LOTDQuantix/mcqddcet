@@ -581,17 +581,24 @@ const app = {
                 stats.totalTime = Math.round(historyData.reduce((acc, curr) => acc + curr.time_taken_seconds, 0) / 60);
             }
 
-            const historyRows = historyData.map(h => `
-                <div class="card mt" style="padding:1rem;display:flex;justify-content:space-between;align-items:center">
+            const historyRows = historyData.map((h, idx) => `
+                <div class="card mt" style="padding:1rem;display:flex;justify-content:space-between;align-items:center; animation: slideUp ${0.4 + (idx * 0.05)}s ease">
                     <div>
                         <strong>${new Date(h.created_at).toLocaleDateString()}</strong>
                         <div class="q-meta"><span>${h.total_questions} Questions</span><span>${Math.round(h.time_taken_seconds / 60)}m taken</span></div>
                     </div>
-                    <div style="font-size:1.5rem;font-weight:800;color:var(--primary)">
-                        ${Math.round((h.score / h.total_questions) * 100)}%
+                    <div style="display:flex; align-items:center; gap:1.5rem">
+                        <div style="font-size:1.5rem;font-weight:800;color:var(--primary)">
+                            ${Math.round((h.score / h.total_questions) * 100)}%
+                        </div>
+                        <button class="btn btn-outline" style="padding:0.5rem 1rem; font-size:0.8rem" onclick="app.renderExamReview(app._lastHistory[${idx}])">
+                            <i data-lucide="eye"></i>Review
+                        </button>
                     </div>
                 </div>
             `).join('');
+
+            this._lastHistory = historyData; // Cache for review
 
             this.setHTML(this.content, `
                 <div class="hero">
@@ -670,14 +677,41 @@ const app = {
         const subj = subjEl ? subjEl.value : '';
         this.setHTML(this.content, '<div class="loader"></div>');
 
-        let path = '/mcqs?select=*&limit=100';
+        let seenIds = [];
+        if (this.user) {
+            try {
+                const { data: hData } = await this.safeFetch(`/user_exam_history?user_id=eq.${this.user.id}&select=results`);
+                hData.forEach(h => {
+                    if (h.results && Array.isArray(h.results)) {
+                        h.results.forEach(r => seenIds.push(r.qid));
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to fetch history for deduplication:", e);
+            }
+        }
+
+        let path = '/mcqs?select=*&limit=150';
         if (subj) path += `&subject=eq.${subj}`;
 
         try {
             const { data } = await this.safeFetch(path);
             if (!data || data.length === 0) throw new Error("No questions found");
 
-            const shuffled = data.sort(() => Math.random() - 0.5);
+            const unseen = data.filter(q => !seenIds.includes(q.id));
+
+            if (unseen.length < 20) {
+                const msg = unseen.length === 0
+                    ? "Wow! You've attempted all available questions in this category. Start fresh or try a different subject."
+                    : `Only ${unseen.length} new questions remain. We've started an exam with those.`;
+                alert(msg);
+                if (unseen.length === 0) {
+                    this.renderExam();
+                    return;
+                }
+            }
+
+            const shuffled = ([...unseen]).sort(() => Math.random() - 0.5);
             const selected = shuffled.slice(0, 20);
 
             this.exam = {
@@ -760,31 +794,42 @@ const app = {
     },
 
     finishExam() {
+        if (this.exam.submitting) return;
         if (!confirm('Are you sure you want to finish and submit?')) return;
+
+        this.exam.submitting = true;
         if (this.exam.timerId) clearInterval(this.exam.timerId);
 
         let correctCount = 0;
-        let resultHtml = '';
-
-        this.exam.questions.forEach((q, i) => {
-            const userAns = this.exam.answers[i];
+        const processedResults = this.exam.questions.map((q, i) => {
+            const userAns = this.exam.answers[i] || null;
             const isCorrect = userAns === q.correct_answer;
             if (isCorrect) correctCount++;
-
-            resultHtml += `
-                <div class="card mt" style="border-left: 4px solid ${isCorrect ? 'var(--success)' : 'var(--danger)'}">
-                    <p><strong>${i + 1}. ${q.question}</strong></p>
-                    <div class="mt" style="font-size:0.9rem">
-                        <span style="color:${isCorrect ? 'var(--success)' : 'var(--danger)'}">
-                            Your Answer: ${userAns || 'Not Answered'}
-                        </span>
-                        ${!isCorrect ? ` | <span style="color:var(--success)">Correct: ${q.correct_answer}</span>` : ''}
-                    </div>
-                </div>
-            `;
+            return {
+                qid: q.id,
+                question: q.question,
+                user_ans: userAns,
+                correct_ans: q.correct_answer,
+                is_correct: isCorrect
+            };
         });
 
-        const score = Math.round((correctCount / this.exam.questions.length) * 100);
+        // Sort results for the immediate view: Wrong ones first
+        const sortedResults = [...processedResults].sort((a, b) => (a.is_correct === b.is_correct) ? 0 : a.is_correct ? 1 : -1);
+
+        let resultHtml = sortedResults.map((r, i) => `
+            <div class="card mt" style="border-left: 4px solid ${r.is_correct ? 'var(--success)' : 'var(--danger)'}; animation: slideUp ${0.3 + (i * 0.05)}s ease">
+                <p><strong>${r.question}</strong></p>
+                <div class="mt" style="font-size:0.9rem">
+                    <span style="color:${r.is_correct ? 'var(--success)' : 'var(--danger)'}">
+                        Your Answer: ${r.user_ans || 'Not Answered'}
+                    </span>
+                    ${!r.is_correct ? ` | <span style="color:var(--success)">Correct: ${r.correct_ans}</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        const scorePct = Math.round((correctCount / this.exam.questions.length) * 100);
 
         // Save history if logged in
         if (this.user) {
@@ -795,16 +840,23 @@ const app = {
                     score: correctCount,
                     total_questions: this.exam.questions.length,
                     time_taken_seconds: 1800 - this.exam.timeLeft,
-                    attempted_question_ids: this.exam.questions.map(q => q.id)
+                    results: processedResults
                 }),
                 headers: { 'Prefer': 'return=minimal' }
-            }).catch(e => console.error("Failed to save history:", e));
+            })
+                .then(() => { this.exam.submitting = false; })
+                .catch(e => {
+                    console.error("Failed to save history:", e);
+                    this.exam.submitting = false;
+                });
+        } else {
+            this.exam.submitting = false;
         }
 
         this.setHTML(this.content,
             `<div class="hero">
                 <h1>Exam Results</h1>
-                <div class="stat-val" style="font-size:4rem">${score}%</div>
+                <div class="stat-val" style="font-size:4rem">${scorePct}%</div>
                 <p>${correctCount} / ${this.exam.questions.length} Correct</p>
             </div>
             <div class="mt">
@@ -817,6 +869,41 @@ const app = {
             </div>`
         );
         this.exam.active = false;
+    },
+
+    renderExamReview(historyItem) {
+        if (!historyItem || !historyItem.results) return;
+
+        // Sort results: Incorrect first
+        const sorted = [...historyItem.results].sort((a, b) => (a.is_correct === b.is_correct) ? 0 : a.is_correct ? 1 : -1);
+
+        const resultsHtml = sorted.map((r, i) => `
+            <div class="card mt" style="border-left: 4px solid ${r.is_correct ? 'var(--success)' : 'var(--danger)'}; animation: slideUp ${0.3 + (i * 0.05)}s ease">
+                <p><strong>${r.question}</strong></p>
+                <div class="mt" style="font-size:0.9rem">
+                    <span style="color:${r.is_correct ? 'var(--success)' : 'var(--danger)'}">
+                        Your Answer: ${r.user_ans || 'Not Answered'}
+                    </span>
+                    ${!r.is_correct ? ` | <span style="color:var(--success)">Correct: ${r.correct_ans}</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        this.setHTML(this.content, `
+            <div class="hero">
+                <i data-lucide="history" style="width:48px; height:48px; color:var(--primary); margin-bottom:1rem"></i>
+                <h1>Exam Review</h1>
+                <p>${new Date(historyItem.created_at).toLocaleDateString()} - Score: ${Math.round((historyItem.score / historyItem.total_questions) * 100)}%</p>
+            </div>
+            <div class="mt">
+                <button class="btn btn-outline" onclick="app.renderDashboard()"><i data-lucide="arrow-left"></i>Back to Dashboard</button>
+            </div>
+            <h3 class="mt" style="margin-top:2.5rem">Detailed Breakdown</h3>
+            ${resultsHtml}
+            <div class="mt" style="padding-bottom:5rem; text-align:center">
+                <button class="btn" onclick="app.renderDashboard()"><i data-lucide="arrow-left"></i>Back to Dashboard</button>
+            </div>
+        `);
     }
 };
 

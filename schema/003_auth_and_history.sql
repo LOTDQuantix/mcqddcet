@@ -14,7 +14,7 @@ CREATE TABLE user_exam_history (
     score INTEGER NOT NULL,
     total_questions INTEGER NOT NULL,
     time_taken_seconds INTEGER NOT NULL,
-    attempted_question_ids JSONB NOT NULL,
+    results JSONB NOT NULL, -- [{ qid: UUID, user_ans: TEXT, correct_ans: TEXT, is_correct: BOOLEAN }]
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
