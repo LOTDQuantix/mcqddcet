@@ -14,13 +14,13 @@ const app = {
     user: null, // Current logged in user
 
     async init() {
-        // Load session
-        const savedUser = localStorage.getItem('ddcet_user');
+        // Load session (Use sessionStorage for "everyday/new window" login)
+        const savedUser = sessionStorage.getItem('ddcet_user');
         if (savedUser) {
             try {
                 this.user = JSON.parse(savedUser);
             } catch (e) {
-                localStorage.removeItem('ddcet_user');
+                sessionStorage.removeItem('ddcet_user');
             }
         }
 
@@ -102,10 +102,14 @@ const app = {
                 ALLOWED_TAGS: [
                     'h1', 'h2', 'h3', 'p', 'a', 'span', 'div', 'button', 'strong', 'i', 'br',
                     'table', 'thead', 'tbody', 'tr', 'th', 'td', 'sup', 'sub',
+                    'form', 'input', 'label', // Added for login/forms
                     // MathML tags for KaTeX resilience
                     'math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'mtext'
                 ],
-                ADD_ATTR: ['onclick', 'data-key', 'data-correct', 'style', 'class', 'href', 'target', 'aria-hidden']
+                ADD_ATTR: [
+                    'onclick', 'data-key', 'data-correct', 'style', 'class', 'href', 'target', 'aria-hidden',
+                    'type', 'id', 'required', 'placeholder', 'value', 'onsubmit', 'for' // Added for forms
+                ]
             });
             el.innerHTML = clean;
         }
@@ -115,9 +119,9 @@ const app = {
         const path = window.location.pathname;
         this.updateNav();
 
-        // Protected Routes
-        const protectedRoutes = ['/practice', '/exam', '/dashboard'];
-        if (protectedRoutes.includes(path) && !this.user) {
+        // ** Global Login Barrier **
+        // Redirect to /login for EVERYTHING if not logged in, except /login itself
+        if (path !== '/login' && !this.user) {
             history.pushState(null, '', '/login');
             return this.renderLogin();
         }
@@ -464,23 +468,23 @@ const app = {
 
     renderLogin() {
         this.setHTML(this.content, `
-            <div class="card mt" style="max-width:400px;margin:4rem auto">
-                <h2 style="text-align:center">Login</h2>
-                <p style="text-align:center;color:var(--text-muted);margin-bottom:2rem">Enter your credentials to track your progress.</p>
+            <div class="card mt" style="max-width:400px;margin:4rem auto;animation:slideUp 0.6s ease">
+                <h2 style="text-align:center;margin-bottom:0.5rem">Welcome Back</h2>
+                <p style="text-align:center;color:var(--text-muted);margin-bottom:2rem">Sign in to access your MCQ platform.</p>
                 <form onsubmit="event.preventDefault(); app.handleLogin()">
                     <div class="mt">
-                        <label style="display:block;margin-bottom:0.5rem">Username</label>
-                        <input type="text" id="login-username" class="btn btn-outline" style="width:100%;text-align:left;background:var(--card-bg)" required>
+                        <label for="login-username" style="display:block;margin-bottom:0.5rem;font-size:0.85rem;color:var(--primary)">Username</label>
+                        <input type="text" id="login-username" placeholder="Enter your username" required>
                     </div>
                     <div class="mt">
-                        <label style="display:block;margin-bottom:0.5rem">Password</label>
-                        <input type="password" id="login-password" class="btn btn-outline" style="width:100%;text-align:left;background:var(--card-bg)" required>
+                        <label for="login-password" style="display:block;margin-bottom:0.5rem;font-size:0.85rem;color:var(--primary)">Password</label>
+                        <input type="password" id="login-password" placeholder="••••••••" required>
                     </div>
-                    <button type="submit" class="btn mt" style="width:100%">Sign In</button>
-                    <p id="login-error" class="mt hidden" style="color:var(--danger);text-align:center;font-size:0.9rem"></p>
+                    <button type="submit" class="btn mt" style="width:100%;margin-top:2rem">Sign In</button>
+                    <p id="login-error" class="card mt hidden" style="color:var(--danger);text-align:center;font-size:0.9rem;padding:0.75rem;border-color:var(--danger);background:rgba(248,113,113,0.1)"></p>
                 </form>
-                <div class="mt" style="text-align:center;font-size:0.8rem;color:var(--text-muted)">
-                    Don't have an account? Ask admin to create one via SQL.
+                <div class="mt" style="text-align:center;font-size:0.8rem;color:var(--text-muted);opacity:0.7">
+                    Restricted Access — Phase 9 Security Active
                 </div>
             </div>
         `);
@@ -499,7 +503,7 @@ const app = {
             
             if (data && data.length > 0 && data[0].password_hash === hash) {
                 this.user = { id: data[0].id, username: data[0].username };
-                localStorage.setItem('ddcet_user', JSON.stringify(this.user));
+                sessionStorage.setItem('ddcet_user', JSON.stringify(this.user));
                 this.updateNav();
                 history.pushState(null, '', '/dashboard');
                 this.renderDashboard();
@@ -514,10 +518,10 @@ const app = {
 
     logout() {
         this.user = null;
-        localStorage.removeItem('ddcet_user');
+        sessionStorage.removeItem('ddcet_user');
         this.updateNav();
-        history.pushState(null, '', '/');
-        this.renderHome();
+        history.pushState(null, '', '/login');
+        this.renderLogin();
     },
 
     async renderDashboard() {
